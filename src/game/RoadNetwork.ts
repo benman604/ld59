@@ -10,6 +10,9 @@ type CellData = {
 };
 
 export class RoadNetwork {
+    private static readonly ISO_TILE_WIDTH = 60;
+    private static readonly ISO_TILE_HEIGHT = 30;
+
     private scene: Phaser.Scene;
     private originX: number;
     private originY: number;
@@ -45,6 +48,26 @@ export class RoadNetwork {
         return [...this.intersections];
     }
 
+    toIsometric(worldX: number, worldY: number): { x: number; y: number } {
+        const localX = worldX - this.originX;
+        const localY = worldY - this.originY;
+
+        return {
+            x: this.originX + (localX - localY),
+            y: this.originY + ((localX + localY) / 2)
+        };
+    }
+
+    fromIsometric(isoX: number, isoY: number): { x: number; y: number } {
+        const localX = isoX - this.originX;
+        const localY = isoY - this.originY;
+
+        return {
+            x: this.originX + ((localX + (2 * localY)) / 2),
+            y: this.originY + (((2 * localY) - localX) / 2)
+        };
+    }
+
     getFirstRoad(): Road | null {
         return this.roads.length > 0 ? this.roads[0] : null;
     }
@@ -68,7 +91,18 @@ export class RoadNetwork {
 
             for (let gridX = start; gridX <= end; gridX++) {
                 const { x, y } = this.gridToWorld(gridX, spec.y);
-                blocks.push(new Block(this.scene, x, y, gridX, spec.y, 'laneblock', 0));
+                blocks.push(new Block(
+                    this.scene,
+                    x,
+                    y,
+                    gridX,
+                    spec.y,
+                    'roadblock-iso',
+                    0,
+                    undefined,
+                    RoadNetwork.ISO_TILE_WIDTH,
+                    RoadNetwork.ISO_TILE_HEIGHT
+                ));
             }
 
             return new Road('ew', blocks);
@@ -79,7 +113,18 @@ export class RoadNetwork {
 
         for (let gridY = start; gridY <= end; gridY++) {
             const { x, y } = this.gridToWorld(spec.x, gridY);
-            blocks.push(new Block(this.scene, x, y, spec.x, gridY, 'laneblock', Math.PI / 2));
+            blocks.push(new Block(
+                this.scene,
+                x,
+                y,
+                spec.x,
+                gridY,
+                'roadblock-iso-nesw',
+                0,
+                undefined,
+                RoadNetwork.ISO_TILE_WIDTH,
+                RoadNetwork.ISO_TILE_HEIGHT
+            ));
         }
 
         return new Road('ns', blocks);
@@ -132,10 +177,7 @@ export class RoadNetwork {
                 x,
                 y,
                 gridX,
-                gridY,
-                '__WHITE',
-                0,
-                0x666666
+                gridY
             );
 
             for (const ewRoad of cell.ewRoads) {
@@ -170,9 +212,13 @@ export class RoadNetwork {
     }
 
     private gridToWorld(gridX: number, gridY: number): { x: number; y: number } {
+        const localX = (gridX * Block.SIZE) + (Block.SIZE / 2);
+        const localY = (gridY * Block.SIZE) + (Block.SIZE / 2);
+        const iso = this.toIsometric(this.originX + localX, this.originY + localY);
+
         return {
-            x: this.originX + (gridX * Block.SIZE) + (Block.SIZE / 2),
-            y: this.originY + (gridY * Block.SIZE) + (Block.SIZE / 2)
+            x: iso.x + (RoadNetwork.ISO_TILE_WIDTH / 2),
+            y: iso.y + (RoadNetwork.ISO_TILE_HEIGHT / 2)
         };
     }
 

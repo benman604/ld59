@@ -17,6 +17,8 @@ export class Boot extends Scene
         this.load.image('traffic-light-yellow', 'assets/traffic_light_yellow.png');
         this.load.image('traffic-light-green', 'assets/traffic_light_green.png');
         this.load.image('laneblock', 'assets/road.png');
+        this.load.image('roadblock-iso', 'assets/roadblock_iso.png');
+        this.load.image('roadblock-iso-nesw', 'assets/roadblock_iso_nesw.png');
         this.load.image('car-sw', 'assets/car_sw.png');
         this.load.image('car-se', 'assets/car_se.png');
         this.load.image('car-ne', 'assets/car_ne.png');

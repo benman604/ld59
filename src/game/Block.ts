@@ -20,12 +20,14 @@ export class Block {
         gridY: number,
         textureKey: string = 'laneblock',
         rotationRadians: number = 0,
-        tint?: number
+        tint?: number,
+        displayWidth: number = Block.SIZE,
+        displayHeight: number = Block.SIZE
     ) {
         this.gridX = gridX;
         this.gridY = gridY;
         this.sprite = scene.add.image(worldX, worldY, textureKey);
-        this.sprite.setDisplaySize(Block.SIZE, Block.SIZE);
+        this.sprite.setDisplaySize(displayWidth, displayHeight);
         this.sprite.setRotation(rotationRadians);
 
         if (typeof tint === 'number') {
