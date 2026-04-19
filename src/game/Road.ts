@@ -60,6 +60,32 @@ export class Road {
         return this.blockMap.get(`${gridX},${gridY}`);
     }
 
+    getBase(): Block | undefined {
+        if (this.blocks.length === 0) {
+            return undefined;
+        }
+
+        const last = this.blocks.length - 1;
+        if (this.orientation === 'ew') {
+            return this.direction === 'ew' ? this.blocks[0] : this.blocks[last];
+        }
+
+        return this.direction === 'ns' ? this.blocks[0] : this.blocks[last];
+    }
+
+    getEnd(): Block | undefined {
+        if (this.blocks.length === 0) {
+            return undefined;
+        }
+
+        const last = this.blocks.length - 1;
+        if (this.orientation === 'ew') {
+            return this.direction === 'ew' ? this.blocks[last] : this.blocks[0];
+        }
+
+        return this.direction === 'ns' ? this.blocks[last] : this.blocks[0];
+    }
+
     getPathPoints(): { x: number; y: number }[] {
         return this.blocks.map((block) => ({ x: block.sprite.x, y: block.sprite.y }));
     }

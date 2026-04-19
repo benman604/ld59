@@ -1,5 +1,5 @@
 import { Block } from './Block';
-import { TrafficLight } from './TrafficLight';
+import { TrafficLight, TrafficLightState } from './TrafficLight';
 import { RoadNetwork } from './RoadNetwork';
 import { Road } from './Road';
 import { Dir, rgb } from '../types';
@@ -53,8 +53,8 @@ export class Intersection extends Block {
         }
 
         const gfx = scene.add.graphics();
-        gfx.fillStyle(0x666666, 1);
-        gfx.lineStyle(2, 0x000000, 1);
+        gfx.fillStyle(0x343434, 1);
+        gfx.lineStyle(2, 0xffffff, 1);
 
         const points = [
             { x: 30, y: 0 },
@@ -89,11 +89,7 @@ export class Intersection extends Block {
     }
 
     addTrafficLight(direction: Dir, light: TrafficLight): void {
-        if (direction == "n") {
-            light.setState('green');
-        } else {
-            light.setState('red');
-        }
+        light.setState('red');
         this.trafficLights[direction] = light;
         this.syncTrafficLightSprites();
     }
@@ -104,6 +100,11 @@ export class Intersection extends Block {
 
     getTrafficLights(): TrafficLight[] {
         return Object.values(this.trafficLights).filter((light): light is TrafficLight => light !== null);
+    }
+
+    getTrafficLightState(direction: Dir): TrafficLightState | null {
+        const light = this.trafficLights[direction];
+        return light ? light.getCurrentState() : null;
     }
 
     private syncTrafficLightSprites(): void {

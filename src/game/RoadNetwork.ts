@@ -2,7 +2,7 @@ import { Block } from './Block';
 import { Intersection } from './Intersection';
 import { Road, RoadSpec } from './Road';
 import { TrafficLight } from './TrafficLight';
-import { LaneDirectionEW, LaneDirectionNS } from '../types';
+import { Dir, LaneDirectionEW, LaneDirectionNS } from '../types';
 
 const arrowEvery = 4;
 
@@ -26,6 +26,8 @@ export class RoadNetwork {
     private grid: Map<string, CellData> = new Map();
     private arrowSprites: Phaser.GameObjects.Image[] = [];
     private roadsByName: Map<string, Road> = new Map();
+    private occupiedCells: Set<string> = new Set();
+    private occupancyIndicators: Map<string, Phaser.GameObjects.Arc> = new Map();
 
     constructor(scene: Phaser.Scene, originX: number, originY: number) {
         this.scene = scene;
@@ -58,92 +60,61 @@ export class RoadNetwork {
     }
 
     configureTrafficLights(): void {
-        const hasIncomingSegment = (road: Road, gridX: number, gridY: number) => {
-            if (road.orientation === 'ew') {
-                const step = road.direction === 'we' ? 1 : -1;
-                return !!road.getBlockAt(gridX + step, gridY);
+        const getPrevCell = (intersection: Intersection, direction: Dir): { x: number; y: number } => {
+            switch (direction) {
+                case 'n':
+                    return { x: intersection.gridX, y: intersection.gridY - 1 };
+                case 's':
+                    return { x: intersection.gridX, y: intersection.gridY + 1 };
+                case 'w':
+                    return { x: intersection.gridX - 1, y: intersection.gridY };
+                case 'e':
+                    return { x: intersection.gridX + 1, y: intersection.gridY };
+                default:
+                    return { x: intersection.gridX, y: intersection.gridY };
             }
-
-            const step = road.direction === 'sn' ? 1 : -1;
-            return !!road.getBlockAt(gridX, gridY + step);
         };
 
-        const hasOutgoingSegment = (road: Road, gridX: number, gridY: number) => {
-            if (road.orientation === 'ew') {
-                const step = road.direction === 'we' ? -1 : 1;
-                return !!road.getBlockAt(gridX + step, gridY);
-            }
-
-            const step = road.direction === 'sn' ? -1 : 1;
-            return !!road.getBlockAt(gridX, gridY + step);
-        };
-
-        const isTerminatingRoad = (road: Road, gridX: number, gridY: number) => {
-            return hasIncomingSegment(road, gridX, gridY) && !hasOutgoingSegment(road, gridX, gridY);
-        };
-
-        const shouldPlaceEwLight = (intersection: Intersection, ewRoad: Road | undefined, nsRoad: Road | undefined) => {
-            if (!ewRoad) {
+        const shouldPlaceLight = (intersection: Intersection, road: Road, direction: Dir): boolean => {
+            const prev = getPrevCell(intersection, direction);
+            if (!road.getBlockAt(prev.x, prev.y)) {
                 return false;
             }
 
-            if (!nsRoad) {
-                return true;
+            const prevBlock = this.getBlockAt(prev.x, prev.y);
+            if (prevBlock instanceof Intersection) {
+                return false;
             }
 
-            const neighbors = [
-                this.getBlockAt(intersection.gridX - 1, intersection.gridY),
-                this.getBlockAt(intersection.gridX + 1, intersection.gridY)
-            ];
-
-            const hasAdjacentOppositeNs = neighbors.some((neighbor) => {
-                if (!neighbor || !(neighbor instanceof Intersection)) {
-                    return false;
-                }
-                const { ns, ew } = neighbor.getConnectedRoads();
-                const adjNs = ns[0];
-                const adjEw = ew[0];
-
-                return adjNs && adjEw && adjEw.name === ewRoad.name && adjNs.direction !== nsRoad.direction;
-            });
-
-            if (!hasAdjacentOppositeNs) {
-                return true;
-            }
-
-            if (ewRoad.direction === 'ew') {
-                return nsRoad.direction === 'sn';
-            }
-
-            return nsRoad.direction === 'ns';
+            return true;
         };
 
         for (const intersection of this.getIntersections()) {
             const { ns, ew } = intersection.getConnectedRoads();
 
-            const nsRoad = ns[0];
-            const ewRoad = ew[0];
-
-            const nsIncoming = !!nsRoad && hasIncomingSegment(nsRoad, intersection.gridX, intersection.gridY);
-            const nsTerminating = !!nsRoad && isTerminatingRoad(nsRoad, intersection.gridX, intersection.gridY);
-
-            if (nsRoad && nsIncoming) {
-                if (nsRoad.direction === 'sn') {
-                    intersection.addTrafficLight('n', new TrafficLight('red'));
-                }
+            for (const nsRoad of ns) {
                 if (nsRoad.direction === 'ns') {
-                    intersection.addTrafficLight('s', new TrafficLight('red'));
+                    if (shouldPlaceLight(intersection, nsRoad, 'n')) {
+                        intersection.addTrafficLight('n', new TrafficLight('red'));
+                    }
+                }
+                if (nsRoad.direction === 'sn') {
+                    if (shouldPlaceLight(intersection, nsRoad, 's')) {
+                        intersection.addTrafficLight('s', new TrafficLight('red'));
+                    }
                 }
             }
 
-            const ewIncoming = !!ewRoad && hasIncomingSegment(ewRoad, intersection.gridX, intersection.gridY);
-
-            if (ewRoad && ewIncoming && !nsTerminating && shouldPlaceEwLight(intersection, ewRoad, nsRoad)) {
-                if (ewRoad.direction === 'we') {
-                    intersection.addTrafficLight('w', new TrafficLight('red'));
-                }
+            for (const ewRoad of ew) {
                 if (ewRoad.direction === 'ew') {
-                    intersection.addTrafficLight('e', new TrafficLight('red'));
+                    if (shouldPlaceLight(intersection, ewRoad, 'w')) {
+                        intersection.addTrafficLight('w', new TrafficLight('red'));
+                    }
+                }
+                if (ewRoad.direction === 'we') {
+                    if (shouldPlaceLight(intersection, ewRoad, 'e')) {
+                        intersection.addTrafficLight('e', new TrafficLight('red'));
+                    }
                 }
             }
         }
@@ -155,6 +126,38 @@ export class RoadNetwork {
 
     getBlockAt(gridX: number, gridY: number): Block | null {
         return this.getBlock(gridX, gridY);
+    }
+
+    isOccupied(gridX: number, gridY: number): boolean {
+        return this.occupiedCells.has(this.cellKey(gridX, gridY));
+    }
+
+    occupy(gridX: number, gridY: number): void {
+        const key = this.cellKey(gridX, gridY);
+        if (this.occupiedCells.has(key)) {
+            return;
+        }
+
+        const block = this.getBlock(gridX, gridY);
+        if (!block) {
+            return;
+        }
+
+        this.occupiedCells.add(key);
+    }
+
+    release(gridX: number, gridY: number): void {
+        const key = this.cellKey(gridX, gridY);
+        if (!this.occupiedCells.has(key)) {
+            return;
+        }
+
+        this.occupiedCells.delete(key);
+        const indicator = this.occupancyIndicators.get(key);
+        if (indicator) {
+            indicator.destroy();
+        }
+        this.occupancyIndicators.delete(key);
     }
 
     getGridFromIso(isoX: number, isoY: number): { gridX: number; gridY: number } {
@@ -169,6 +172,10 @@ export class RoadNetwork {
             gridX: Math.floor(localX / Block.SIZE),
             gridY: Math.floor(localY / Block.SIZE)
         };
+    }
+
+    getWorldFromGrid(gridX: number, gridY: number): { x: number; y: number } {
+        return this.gridToWorld(gridX, gridY);
     }
 
     toIsometric(worldX: number, worldY: number): { x: number; y: number } {
@@ -198,6 +205,10 @@ export class RoadNetwork {
     destroy(): void {
         this.arrowSprites.forEach(sprite => sprite.destroy());
         this.arrowSprites = [];
+
+        this.occupancyIndicators.forEach(indicator => indicator.destroy());
+        this.occupancyIndicators.clear();
+        this.occupiedCells.clear();
 
         for (const cell of this.grid.values()) {
             cell.block.destroy();

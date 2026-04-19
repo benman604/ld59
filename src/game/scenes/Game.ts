@@ -4,6 +4,7 @@ import { Scene } from 'phaser';
 import { Car } from '../Car';
 import { Navigator } from '../Navigator';
 import { Road } from '../Road';
+import { Block } from '../Block';
 
 export class Game extends Scene
 {
@@ -12,6 +13,8 @@ export class Game extends Scene
     roadNetwork: RoadNetwork;
     cars: Car[] = [];
     navigators: Navigator[] = [];
+    private crashTriggered = false;
+    private crashDistance = 20;
 
     constructor ()
     {
@@ -22,7 +25,7 @@ export class Game extends Scene
     create ()
     {
         this.camera = this.cameras.main;
-        // this.camera.setBackgroundColor(0x2f9e44);
+        this.camera.setBackgroundColor(0x2f9e44);
 
         this.background = this.add.image(512, 384, 'background');
         this.background.setAlpha(0);
@@ -67,81 +70,95 @@ export class Game extends Scene
             { name: 'northbound2', orientation: 'ns', direction: 'n', startY: -10, endY: 20, x: 24 }
         ]);
 
+        this.createGridSprite('skyscraper', 2, 4, { depth: 20000 });
+        this.createGridSprite('skyscraper', 2, 5, { depth: 20000 });
+        this.createGridSprite('skyscraper', 11, 1, { depth: 20000});
+        this.createGridSprite('skyscraper', 11, 4, {depth: 20000});
+        this.createGridSprite('skyscraper', 13, 4, {depth: 20000});
+
+        this.createGridSprite('opening_ne', 4, -11, { depth: 200000 });
+        this.createGridSprite('opening_ne', 5, -11, { depth: 200000 });
+        this.createGridSprite('opening_ne', 23, -11, { depth: 200000 });
+
+        this.createGridSprite('opening_hidden', 5, 19, { depth: 200000 });
+        this.createGridSprite('opening_hidden', 23,19, { depth: 200000 });
+
+        this.createGridSprite('opening_nw', -12, 3, { depth: 200000 });
+        this.createGridSprite('opening_nw', -12, 9, { depth: 200000 });
+
 
         const eastbound = this.roadNetwork.getRoadByName('eastbound');
         const westbound = this.roadNetwork.getRoadByName('westbound');
         const southbound = this.roadNetwork.getRoadByName('southbound');
         const northbound = this.roadNetwork.getRoadByName('northbound');
         const northbound2 = this.roadNetwork.getRoadByName('northbound2');
-        const northboundBase = northbound?.blocks[northbound.blocks.length - 1];
-        const northbound2Base = northbound2?.blocks[northbound2.blocks.length - 1];
-        const northboundEnd = northbound?.blocks[0];
-        const northbound2End = northbound2?.blocks[0];
-        const southboundBase = southbound?.blocks[0];
-        const westboundEnd = westbound?.blocks[0];
-        const eastboundBase = eastbound?.blocks[0];
+        const northboundBase = northbound?.getBase();
+        const northbound2Base = northbound2?.getBase();
+        const northboundEnd = northbound?.getEnd();
+        const northbound2End = northbound2?.getEnd();
+        const southboundBase = southbound?.getBase();
+        const westboundEnd = westbound?.getEnd();
+        const eastboundBase = eastbound?.getBase();
 
-        const routes = [
-            { 
-                source: {
-                    x: northboundBase?.gridX,
-                    y: northboundBase?.gridY,
-                    road: 'northbound'
-                },
-                destinations: [
-                    { x: northboundEnd?.gridX, y: northboundEnd?.gridY },
-                    { x: northbound2End?.gridX, y: northbound2End?.gridY },
-                    { x: westboundEnd?.gridX, y: westboundEnd?.gridY }
-                ],
-            },
+
+        const routes: Array<{ road?: Road; source?: Block; destinations: Array<Block | undefined> }> = [
             {
-                source: {
-                    x: southboundBase?.gridX,
-                    y: southboundBase?.gridY,
-                    road: 'southbound'
-                },
+                road: northbound,
+                source: northboundBase,
                 destinations: [
-                    { x: westboundEnd?.gridX, y: westboundEnd?.gridY },
-                    { x: northbound2End?.gridX, y: northbound2End?.gridY },
+                    northboundEnd,
+                    northbound2End,
+                    westboundEnd
                 ]
             },
             {
-                source: {
-                    x: northbound2Base?.gridX,
-                    y: northbound2Base?.gridY,
-                    road: 'northbound2'
-                },
+                road: southbound,
+                source: southboundBase,
                 destinations: [
-                    { x: northbound2End?.gridX, y: northbound2End?.gridY },
-                    { x: northboundEnd?.gridX, y: northboundEnd?.gridY },
-                    { x: westboundEnd?.gridX, y: westboundEnd?.gridY }
+                    westboundEnd,
+                    northbound2End
                 ]
             },
             {
-                source: {
-                    x: eastboundBase?.gridX,
-                    y: eastboundBase?.gridY,
-                    road: 'eastbound'
-                },
+                road: northbound2,
+                source: northbound2Base,
                 destinations: [
-                    { x: northbound2End?.gridX, y: northbound2End?.gridY },
-                    { x: westboundEnd?.gridX, y: westboundEnd?.gridY },
-                    { x: northboundEnd?.gridX, y: northboundEnd?.gridY }
+                    northbound2End,
+                    northboundEnd,
+                    westboundEnd
+                ]
+            },
+            {
+                road: eastbound,
+                source: eastboundBase,
+                destinations: [
+                    northbound2End,
+                    westboundEnd,
+                    northboundEnd
                 ]
             }
-        ]
+        ];
 
         const minSpawnDelayMs = 700;
         const maxSpawnDelayMs = 1600;
 
         const scheduleSpawn = () => {
             for (const route of routes) {
-                const randomDest = Phaser.Utils.Array.GetRandom(route.destinations);
+                if (!route.road || !route.source) {
+                    continue;
+                }
+
+                const availableDestinations = route.destinations.filter((dest): dest is Block => !!dest);
+                if (availableDestinations.length === 0) {
+                    continue;
+                }
+
+                const randomDest = Phaser.Utils.Array.GetRandom(availableDestinations);
                 this.spawnCar(
-                    this.roadNetwork.getRoadByName(route.source.road)!,
+                    route.road,
                     60,
-                    { x: route.source.x!, y: route.source.y! },
-                    { x: randomDest.x!, y: randomDest.y! }
+                    route.source,
+                    randomDest
                 );
             }
 
@@ -193,15 +210,12 @@ export class Game extends Scene
         EventBus.emit('current-scene-ready', this);
     }
 
-    private spawnCar(road: Road, speed: number, source: { x: number; y: number }, destination: { x: number; y: number }): void {
-        const sourceBlock = this.roadNetwork.getBlockAt(source.x, source.y);
-        const destinationBlock = this.roadNetwork.getBlockAt(destination.x, destination.y);
-
-        if (!sourceBlock || !destinationBlock) {
+    private spawnCar(road: Road, speed: number, sourceBlock: Block, destinationBlock: Block): void {
+        if (this.isSpawnBlocked(road, sourceBlock)) {
             return;
         }
 
-        const car = new Car(this, road, speed);
+        const car = new Car(this, this.roadNetwork, road, speed);
         const navigator = new Navigator(
             car,
             this.roadNetwork,
@@ -213,8 +227,47 @@ export class Game extends Scene
         this.navigators.push(navigator);
     }
 
+    private isSpawnBlocked(road: Road, sourceBlock: Block): boolean {
+        if (this.roadNetwork.isOccupied(sourceBlock.gridX, sourceBlock.gridY)) {
+            return true;
+        }
+
+        const step = road.orientation === 'ew'
+            ? (road.direction === 'we' ? -1 : 1)
+            : (road.direction === 'sn' ? -1 : 1);
+
+        const nextX = road.orientation === 'ew' ? sourceBlock.gridX + step : sourceBlock.gridX;
+        const nextY = road.orientation === 'ns' ? sourceBlock.gridY + step : sourceBlock.gridY;
+        const nextBlock = this.roadNetwork.getBlockAt(nextX, nextY);
+
+        return !!nextBlock && this.roadNetwork.isOccupied(nextX, nextY);
+    }
+
+    createGridSprite(
+        textureKey: string,
+        gridX: number,
+        gridY: number,
+        options: { depth?: number; scale?: number, shift?: { x?: number; y?: number } } = {}
+    ): Phaser.GameObjects.Image {
+        const { x, y } = this.roadNetwork.getWorldFromGrid(gridX, gridY);
+        const sprite = this.add.image(x + (options.shift?.x || 0), y + (options.shift?.y || 0) + 15, textureKey);
+
+        if (typeof options.scale === 'number') {
+            sprite.setScale(options.scale);
+        }
+        if (typeof options.depth === 'number') {
+            sprite.setDepth(options.depth);
+        }
+
+        return sprite;
+    }
+
     update (_time: number, delta: number)
     {
+        if (this.crashTriggered) {
+            return;
+        }
+
         for (let i = this.cars.length - 1; i >= 0; i -= 1) {
             const car = this.cars[i];
             if (!car) {
@@ -227,6 +280,63 @@ export class Game extends Scene
                 this.navigators.splice(i, 1);
             }
         }
+
+        this.checkForCrash();
+    }
+
+    private checkForCrash(): void {
+        for (let i = 0; i < this.cars.length; i += 1) {
+            const carA = this.cars[i];
+            if (!carA) {
+                continue;
+            }
+            const posA = carA.getPosition();
+
+            for (let j = i + 1; j < this.cars.length; j += 1) {
+                const carB = this.cars[j];
+                if (!carB) {
+                    continue;
+                }
+
+                const posB = carB.getPosition();
+                const dx = posA.x - posB.x;
+                const dy = posA.y - posB.y;
+                const distance = Math.hypot(dx, dy);
+
+                if (distance <= this.crashDistance) {
+                    this.triggerCrash((posA.x + posB.x) / 2, (posA.y + posB.y) / 2);
+                    return;
+                }
+            }
+        }
+    }
+
+    private triggerCrash(x: number, y: number): void {
+        this.crashTriggered = true;
+
+        this.camera.pan(x, y, 200, 'Sine.easeInOut');
+        this.camera.zoomTo(2.2, 200, 'Sine.easeInOut');
+
+        const boom = this.add.circle(x, y, 12, 0xffa500, 1);
+        boom.setDepth(5000);
+
+        let crashPaused = false;
+        this.tweens.add({
+            targets: boom,
+            scale: { from: 0.6, to: 6 },
+            alpha: { from: 1, to: 0.6 },
+            duration: 3000,
+            ease: 'Quad.easeOut',
+            onUpdate: (tween) => {
+                if (crashPaused) {
+                    return;
+                }
+                if (tween.progress >= 0.5) {
+                    crashPaused = true;
+                    this.scene.pause();
+                }
+            }
+        });
     }
 
     changeScene ()

@@ -129,7 +129,7 @@ function App()
                     <pre>{`{\n  x: ${mousePosition.x}\n  y: ${mousePosition.y}\n}`}</pre>
                 </div>
                 <div className="spritePosition">Grid Segment:
-                    <pre>{`{\n  x: ${gridPosition.x}\n  y: ${gridPosition.y}\n}`}</pre>
+                    <pre>{`{\n  x: ${gridPosition.x}\n  y: ${gridPosition.y - 1}\n}`}</pre>
                 </div>
                 <div>
                     <button className="button" onClick={addSprite}>Add New Sprite</button>

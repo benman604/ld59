@@ -18,15 +18,11 @@ export class Navigator {
     }
 
     computeRoute(): void {
-        const points = this.findRoutePointsBlocks(this.source, this.destination);
-        this.car.setPathPoints(points, false);
-    }
-
-    private findRoutePointsBlocks(source: Block, destination: Block): { x: number; y: number }[] {
-        return this.findRoutePoints(
-            { gridX: source.gridX, gridY: source.gridY },
-            { gridX: destination.gridX, gridY: destination.gridY }
+        const blocks = this.findRoute(
+            { gridX: this.source.gridX, gridY: this.source.gridY },
+            { gridX: this.destination.gridX, gridY: this.destination.gridY }
         );
+        this.car.setRoute(blocks, false);
     }
 
     private findRoute(source: { gridX: number; gridY: number }, destination: { gridX: number; gridY: number }): Block[] {
@@ -82,13 +78,6 @@ export class Navigator {
         }
 
         return blocks;
-    }
-
-    private findRoutePoints(source: { gridX: number; gridY: number }, destination: { gridX: number; gridY: number }): { x: number; y: number }[] {
-        return this.findRoute(source, destination).map((block) => ({
-            x: block.sprite.x,
-            y: block.sprite.y
-        }));
     }
 
     private buildDirectedGraph(): Map<string, string[]> {
