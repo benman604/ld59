@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { IRefPhaserGame, PhaserGame } from './PhaserGame';
-import { MainMenu } from './game/scenes/MainMenu';
 import { EventBus } from './game/EventBus';
 import { BuildPanel } from './ui/BuildPanel';
 import { PositionPanel } from './ui/PositionPanel';

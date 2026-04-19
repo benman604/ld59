@@ -25,6 +25,8 @@ type RoadSummary = BuildSummary & {
     name: string;
 };
 
+type RoadInstance = ReturnType<RoadNetwork['getRoads']>[number];
+
 export class LevelBuilder extends GameWrapper
 {
     private buildMode = false;
@@ -38,6 +40,10 @@ export class LevelBuilder extends GameWrapper
     private roadSpecs: RoadSpec[] = [];
     private modeHint: Phaser.GameObjects.Text | null = null;
     private clickStart: { x: number; y: number } | null = null;
+    private selectedRoad: RoadInstance | null = null;
+    private selectionSprites: Phaser.GameObjects.Image[] = [];
+
+    private static readonly SELECTION_TEXTURE_KEY = 'road-selection-iso';
 
     constructor ()
     {
@@ -98,6 +104,7 @@ export class LevelBuilder extends GameWrapper
         const handleDelete = (payload: { name: string }) => {
             this.roadSpecs = this.roadSpecs.filter((spec) => spec.name !== payload.name);
             this.roadNetwork.build(this.roadSpecs);
+            this.clearSelectedRoad();
             EventBus.emit('road:clear');
         };
 
@@ -179,6 +186,10 @@ export class LevelBuilder extends GameWrapper
             this.clickStart = null;
 
             if (dragDistance > 6) {
+                return;
+            }
+
+            if (this.isTrafficLightClick(pointer)) {
                 return;
             }
 
@@ -325,14 +336,17 @@ export class LevelBuilder extends GameWrapper
 
         const road = this.findRoadAt(grid);
         if (!road) {
+            this.clearSelectedRoad();
+            EventBus.emit('road:clear');
             return;
         }
 
+        this.selectRoad(road);
         const summary = this.getRoadSummary(road);
         EventBus.emit('road:inspect', summary);
     }
 
-    private findRoadAt(grid: GridPoint): ReturnType<RoadNetwork['getRoads']>[number] | null {
+    private findRoadAt(grid: GridPoint): RoadInstance | null {
         for (const road of this.roadNetwork.getRoads()) {
             if (road.getBlockAt(grid.gridX, grid.gridY)) {
                 return road;
@@ -342,7 +356,7 @@ export class LevelBuilder extends GameWrapper
         return null;
     }
 
-    private getRoadSummary(road: ReturnType<RoadNetwork['getRoads']>[number]): RoadSummary {
+    private getRoadSummary(road: RoadInstance): RoadSummary {
         const intersections = this.countRoadIntersections(road);
         const length = road.blocks.length;
         const cost = (COST_PER_BLOCK * length) + (COST_PER_INTERSECTION * intersections);
@@ -357,7 +371,7 @@ export class LevelBuilder extends GameWrapper
         };
     }
 
-    private countRoadIntersections(road: ReturnType<RoadNetwork['getRoads']>[number]): number {
+    private countRoadIntersections(road: RoadInstance): number {
         let count = 0;
 
         for (const block of road.blocks) {
@@ -373,6 +387,63 @@ export class LevelBuilder extends GameWrapper
     private checkRoadBuild(_cells: GridPoint[]): boolean {
         const buildings: GridPoint[] = [];
         return buildings.length === 0;
+    }
+
+    private isTrafficLightClick(pointer: Phaser.Input.Pointer): boolean {
+        const hits = this.input.hitTestPointer(pointer);
+        return hits.some((hit) => (hit as Phaser.GameObjects.GameObject).getData?.('trafficLight'));
+    }
+
+    private selectRoad(road: RoadInstance): void {
+        if (this.selectedRoad?.name === road.name) {
+            return;
+        }
+
+        this.clearSelectedRoad();
+        this.selectedRoad = road;
+        this.ensureSelectionTexture();
+
+        for (const block of road.blocks) {
+            const sprite = this.add.image(block.sprite.x, block.sprite.y, LevelBuilder.SELECTION_TEXTURE_KEY);
+            sprite.setAlpha(0.35);
+            sprite.setDepth(Layers.Roads + 20 + (sprite.y / 1000));
+            this.selectionSprites.push(sprite);
+        }
+    }
+
+    private clearSelectedRoad(): void {
+        this.selectionSprites.forEach(sprite => sprite.destroy());
+        this.selectionSprites = [];
+        this.selectedRoad = null;
+    }
+
+    private ensureSelectionTexture(): void {
+        if (this.textures.exists(LevelBuilder.SELECTION_TEXTURE_KEY)) {
+            return;
+        }
+
+        const gfx = this.add.graphics();
+        gfx.fillStyle(0xffffff, 1);
+        gfx.lineStyle(1, 0xffffff, 1);
+
+        const points = [
+            { x: 30, y: 0 },
+            { x: 60, y: 15 },
+            { x: 30, y: 30 },
+            { x: 0, y: 15 }
+        ];
+
+        gfx.beginPath();
+        gfx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+            gfx.lineTo(points[i].x, points[i].y);
+        }
+        gfx.closePath();
+        gfx.fillPath();
+        gfx.strokePath();
+
+        gfx.generateTexture(LevelBuilder.SELECTION_TEXTURE_KEY, 60, 30);
+        gfx.destroy();
     }
 
     private createRoadSpec(start: GridPoint, end: GridPoint): RoadSpec {

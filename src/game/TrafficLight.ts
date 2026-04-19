@@ -73,6 +73,7 @@ export class TrafficLight {
 
         if (!this.sprite) {
             this.sprite = scene.add.image(x, y, this.getTextureKey());
+            this.sprite.setData('trafficLight', true);
             this.sprite.setInteractive({ useHandCursor: true });
             this.sprite.on('pointerdown', () => {
                 this.cycleToNextState();
