@@ -14,7 +14,6 @@ export class Intersection extends Block {
         e: null,
         w: null
     };
-    private trafficLightSprites: Phaser.GameObjects.Image[] = [];
     private trafficLightLines: Phaser.GameObjects.Graphics[] = [];
 
     private static readonly TRAFFIC_LIGHT_X_OFFSET = 25;
@@ -108,8 +107,6 @@ export class Intersection extends Block {
     }
 
     private syncTrafficLightSprites(): void {
-        this.trafficLightSprites.forEach(sprite => sprite.destroy());
-        this.trafficLightSprites = [];
         this.trafficLightLines.forEach(line => line.destroy());
         this.trafficLightLines = [];
 
@@ -164,11 +161,8 @@ export class Intersection extends Block {
             line.strokePath();
             line.setDepth(this.sprite.depth + 1);
             this.trafficLightLines.push(line);
-            
-            const sprite = this.scene.add.image(pos.x, pos.y, light.getTextureKey());
-            sprite.setDepth(this.sprite.depth + 5);
-            sprite.setScale(2);
-            this.trafficLightSprites.push(sprite);
+
+            light.render(this.scene, pos.x, pos.y, this.sprite.depth + 5, 2);
         });
     }
 }

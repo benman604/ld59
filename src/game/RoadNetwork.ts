@@ -1,6 +1,7 @@
 import { Block } from './Block';
 import { Intersection } from './Intersection';
 import { Road, RoadSpec } from './Road';
+import { TrafficLight } from './TrafficLight';
 import { LaneDirectionEW, LaneDirectionNS } from '../types';
 
 const arrowEvery = 4;
@@ -45,6 +46,7 @@ export class RoadNetwork {
         this.createIntersections();
         this.linkNeighborBlocks();
         this.placeRoadArrows();
+        this.configureTrafficLights();
     }
 
     getRoads(): Road[] {
@@ -53,6 +55,79 @@ export class RoadNetwork {
 
     getRoadByName(name: string): Road | undefined {
         return this.roadsByName.get(name);
+    }
+
+    configureTrafficLights(): void {
+        const isStub = (road: Road, gridX: number, gridY: number) => {
+            if (road.orientation === 'ew') {
+                const step = road.direction === 'we' ? -1 : 1;
+                return !road.getBlockAt(gridX + step, gridY);
+            }
+
+            const step = road.direction === 'sn' ? -1 : 1;
+            return !road.getBlockAt(gridX, gridY + step);
+        };
+
+        const shouldPlaceEwLight = (intersection: Intersection, ewRoad: Road | undefined, nsRoad: Road | undefined) => {
+            if (!ewRoad) {
+                return false;
+            }
+
+            if (!nsRoad) {
+                return true;
+            }
+
+            const neighbors = [
+                this.getBlockAt(intersection.gridX - 1, intersection.gridY),
+                this.getBlockAt(intersection.gridX + 1, intersection.gridY)
+            ];
+
+            const hasAdjacentOppositeNs = neighbors.some((neighbor) => {
+                if (!neighbor || !(neighbor instanceof Intersection)) {
+                    return false;
+                }
+                const { ns, ew } = neighbor.getConnectedRoads();
+                const adjNs = ns[0];
+                const adjEw = ew[0];
+
+                return adjNs && adjEw && adjEw.name === ewRoad.name && adjNs.direction !== nsRoad.direction;
+            });
+
+            if (!hasAdjacentOppositeNs) {
+                return true;
+            }
+
+            if (ewRoad.direction === 'ew') {
+                return nsRoad.direction === 'sn';
+            }
+
+            return nsRoad.direction === 'ns';
+        };
+
+        for (const intersection of this.getIntersections()) {
+            const { ns, ew } = intersection.getConnectedRoads();
+
+            const nsRoad = ns[0];
+            const ewRoad = ew[0];
+
+            if (nsRoad && !isStub(nsRoad, intersection.gridX, intersection.gridY)) {
+                if (nsRoad.direction === 'sn') {
+                    intersection.addTrafficLight('n', new TrafficLight('red'));
+                }
+                if (nsRoad.direction === 'ns') {
+                    intersection.addTrafficLight('s', new TrafficLight('red'));
+                }
+            }
+
+            if (ewRoad && !isStub(ewRoad, intersection.gridX, intersection.gridY) && shouldPlaceEwLight(intersection, ewRoad, nsRoad)) {
+                if (ewRoad.direction === 'we') {
+                    intersection.addTrafficLight('w', new TrafficLight('red'));
+                }
+                if (ewRoad.direction === 'ew') {
+                    intersection.addTrafficLight('e', new TrafficLight('red'));
+                }
+            }
+        }
     }
 
     getIntersections(): Intersection[] {
@@ -72,82 +147,6 @@ export class RoadNetwork {
             gridX: Math.floor(localX / Block.SIZE),
             gridY: Math.floor(localY / Block.SIZE)
         };
-    }
-
-    findRouteBlocks(source: Block, destination: Block): Block[] {
-        return this.findRoute(
-            { gridX: source.gridX, gridY: source.gridY },
-            { gridX: destination.gridX, gridY: destination.gridY }
-        );
-    }
-
-    findRoutePointsBlocks(source: Block, destination: Block): { x: number; y: number }[] {
-        return this.findRoutePoints(
-            { gridX: source.gridX, gridY: source.gridY },
-            { gridX: destination.gridX, gridY: destination.gridY }
-        );
-    }
-
-    findRoute(source: { gridX: number; gridY: number }, destination: { gridX: number; gridY: number }): Block[] {
-        const graph = this.buildDirectedGraph();
-        const startKey = this.cellKey(source.gridX, source.gridY);
-        const endKey = this.cellKey(destination.gridX, destination.gridY);
-
-        if (!graph.has(startKey) || !graph.has(endKey)) {
-            throw new Error('Source or destination is not on a road within this network.');
-        }
-
-        const queue: string[] = [startKey];
-        const visited = new Set<string>([startKey]);
-        const prev = new Map<string, string | null>();
-        prev.set(startKey, null);
-
-        while (queue.length > 0) {
-            const current = queue.shift()!;
-            if (current === endKey) {
-                break;
-            }
-
-            const neighbors = graph.get(current) ?? [];
-            for (const next of neighbors) {
-                if (visited.has(next)) {
-                    continue;
-                }
-                visited.add(next);
-                prev.set(next, current);
-                queue.push(next);
-            }
-        }
-
-        if (!prev.has(endKey)) {
-            throw new Error('No directed route found between source and destination.');
-        }
-
-        const pathKeys: string[] = [];
-        let cursor: string | null = endKey;
-        while (cursor) {
-            pathKeys.push(cursor);
-            cursor = prev.get(cursor) ?? null;
-        }
-        pathKeys.reverse();
-
-        const blocks: Block[] = [];
-        for (const key of pathKeys) {
-            const [x, y] = this.parseCellKey(key);
-            const block = this.getBlock(x, y);
-            if (block) {
-                blocks.push(block);
-            }
-        }
-
-        return blocks;
-    }
-
-    findRoutePoints(source: { gridX: number; gridY: number }, destination: { gridX: number; gridY: number }): { x: number; y: number }[] {
-        return this.findRoute(source, destination).map((block) => ({
-            x: block.sprite.x,
-            y: block.sprite.y
-        }));
     }
 
     toIsometric(worldX: number, worldY: number): { x: number; y: number } {
@@ -391,84 +390,6 @@ export class RoadNetwork {
         }
 
         return direction === 's' ? 'ns' : 'sn';
-    }
-
-    private buildDirectedGraph(): Map<string, string[]> {
-        const graph = new Map<string, string[]>();
-
-        for (const road of this.roads) {
-            const step = road.orientation === 'ew'
-                ? (road.direction === 'we' ? -1 : 1)
-                : (road.direction === 'sn' ? -1 : 1);
-
-            if (road.orientation === 'ew') {
-                const start = step > 0 ? road.minIndex : road.maxIndex;
-                const end = step > 0 ? road.maxIndex : road.minIndex;
-
-                for (let x = start; step > 0 ? x <= end : x >= end; x += step) {
-                    const block = road.getBlockAt(x, road.fixedCoord);
-                    if (!block) {
-                        continue;
-                    }
-
-                    const currentKey = this.cellKey(block.gridX, block.gridY);
-                    if (!graph.has(currentKey)) {
-                        graph.set(currentKey, []);
-                    }
-
-                    const nextX = x + step;
-                    if (step > 0 ? nextX > end : nextX < end) {
-                        continue;
-                    }
-
-                    const nextBlock = road.getBlockAt(nextX, road.fixedCoord);
-                    if (!nextBlock) {
-                        continue;
-                    }
-
-                    const nextKey = this.cellKey(nextBlock.gridX, nextBlock.gridY);
-                    graph.get(currentKey)!.push(nextKey);
-
-                    if (!graph.has(nextKey)) {
-                        graph.set(nextKey, []);
-                    }
-                }
-            } else {
-                const start = step > 0 ? road.minIndex : road.maxIndex;
-                const end = step > 0 ? road.maxIndex : road.minIndex;
-
-                for (let y = start; step > 0 ? y <= end : y >= end; y += step) {
-                    const block = road.getBlockAt(road.fixedCoord, y);
-                    if (!block) {
-                        continue;
-                    }
-
-                    const currentKey = this.cellKey(block.gridX, block.gridY);
-                    if (!graph.has(currentKey)) {
-                        graph.set(currentKey, []);
-                    }
-
-                    const nextY = y + step;
-                    if (step > 0 ? nextY > end : nextY < end) {
-                        continue;
-                    }
-
-                    const nextBlock = road.getBlockAt(road.fixedCoord, nextY);
-                    if (!nextBlock) {
-                        continue;
-                    }
-
-                    const nextKey = this.cellKey(nextBlock.gridX, nextBlock.gridY);
-                    graph.get(currentKey)!.push(nextKey);
-
-                    if (!graph.has(nextKey)) {
-                        graph.set(nextKey, []);
-                    }
-                }
-            }
-        }
-
-        return graph;
     }
 
     private getArrowTextureKey(direction: LaneDirectionEW | LaneDirectionNS): string {

@@ -2,16 +2,20 @@ export type TrafficLightState = 'red' | 'yellow' | 'green';
 
 export class TrafficLight {
     private currentState: TrafficLightState = 'red';
-    private states: TrafficLightState[] = ['red', 'yellow', 'green'];
-    private stateIndex: number = 0;
+    private yellowTimeout: number = 1000; // Duration of yellow light in milliseconds
+    private scene?: Phaser.Scene;
+    private sprite?: Phaser.GameObjects.Image;
+    private yellowTimer?: Phaser.Time.TimerEvent;
+    private hoverBorder?: Phaser.GameObjects.Graphics;
+    private static readonly HOVER_PADDING = 2;
 
     constructor(initialState: TrafficLightState = 'red') {
-        this.setCurrentState(initialState);
+        this.currentState = initialState;
     }
 
-    private setCurrentState(state: TrafficLightState) {
+    private setCurrentState(state: TrafficLightState): void {
         this.currentState = state;
-        this.stateIndex = this.states.indexOf(state);
+        this.updateSprite();
     }
 
     getCurrentState(): TrafficLightState {
@@ -26,13 +30,91 @@ export class TrafficLight {
         return `traffic-light-${this.currentState}`;
     }
 
-    cycleToNextState(): TrafficLightState {
-        this.stateIndex = (this.stateIndex + 1) % this.states.length;
-        this.currentState = this.states[this.stateIndex];
-        return this.currentState;
+    setState(state: TrafficLightState): void {
+        if (this.yellowTimer) {
+            this.yellowTimer.remove(false);
+            this.yellowTimer = undefined;
+        }
+        this.setCurrentState(state);
     }
 
-    setState(state: TrafficLightState): void {
-        this.setCurrentState(state);
+    cycleToNextState(): void {
+        if (this.currentState === 'yellow') {
+            return;
+        }
+
+        if (this.currentState === 'red') {
+            this.setCurrentState('green');
+            return;
+        }
+
+        const targetState: TrafficLightState = 'red';
+        this.setCurrentState('yellow');
+
+        if (this.yellowTimer) {
+            this.yellowTimer.remove(false);
+        }
+
+        if (this.scene) {
+            this.yellowTimer = this.scene.time.delayedCall(this.yellowTimeout, () => {
+                this.setCurrentState(targetState);
+            });
+        } else {
+            setTimeout(() => {
+                this.setCurrentState(targetState);
+            }, this.yellowTimeout);
+        }
+    }
+
+    render(scene: Phaser.Scene, x: number, y: number, depth: number, scale: number): void {
+        if (!this.scene) {
+            this.scene = scene;
+        }
+
+        if (!this.sprite) {
+            this.sprite = scene.add.image(x, y, this.getTextureKey());
+            this.sprite.setInteractive({ useHandCursor: true });
+            this.sprite.on('pointerdown', () => {
+                this.cycleToNextState();
+            });
+            this.sprite.on('pointerover', () => {
+                if (this.hoverBorder) {
+                    this.hoverBorder.setVisible(true);
+                }
+            });
+            this.sprite.on('pointerout', () => {
+                if (this.hoverBorder) {
+                    this.hoverBorder.setVisible(false);
+                }
+            });
+        }
+
+        if (!this.hoverBorder) {
+            this.hoverBorder = scene.add.graphics();
+            this.hoverBorder.setVisible(false);
+        }
+
+        this.sprite.setPosition(x, y);
+        this.sprite.setDepth(depth);
+        this.sprite.setScale(scale);
+        this.sprite.setTexture(this.getTextureKey());
+
+        const width = this.sprite.displayWidth + (TrafficLight.HOVER_PADDING * 2);
+        const height = this.sprite.displayHeight + (TrafficLight.HOVER_PADDING * 2);
+        this.hoverBorder.setDepth(depth + 1);
+        this.hoverBorder.clear();
+        this.hoverBorder.lineStyle(2, 0xffffff, 1);
+        this.hoverBorder.strokeRect(
+            x - (width / 2),
+            y - (height / 2),
+            width,
+            height
+        );
+    }
+
+    private updateSprite(): void {
+        if (this.sprite) {
+            this.sprite.setTexture(this.getTextureKey());
+        }
     }
 }
