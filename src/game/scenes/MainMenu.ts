@@ -44,7 +44,7 @@ export class MainMenu extends GameWrapper
             this.logoTween = null;
         }
 
-        this.scene.start('TestGame');
+        this.scene.start('LevelBuilder');
     }
 
     moveLogo (vueCallback: ({ x, y }: { x: number, y: number }) => void)

@@ -1,17 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { IRefPhaserGame, PhaserGame } from './PhaserGame';
 import { MainMenu } from './game/scenes/MainMenu';
+import { EventBus } from './game/EventBus';
+import { BuildPanel } from './ui/BuildPanel';
+import { PositionPanel } from './ui/PositionPanel';
+import { RoadInspector } from './ui/RoadInspector';
+import type { BuildSummary, RoadSummary } from './ui/types';
 
 function App()
 {
-    // The sprite can only be moved in the MainMenu Scene
-    const [canMoveSprite, setCanMoveSprite] = useState(true);
-
     //  References to the PhaserGame component (game and scene are exposed)
     const phaserRef = useRef<IRefPhaserGame | null>(null);
-    const [spritePosition, setSpritePosition] = useState({ x: 0, y: 0 });
     const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
     const [gridPosition, setGridPosition] = useState({ x: 0, y: 0 });
+    const [buildMode, setBuildMode] = useState(false);
+    const [buildSummary, setBuildSummary] = useState<BuildSummary | null>(null);
+    const [roadSummary, setRoadSummary] = useState<RoadSummary | null>(null);
+    const [isBuilderScene, setIsBuilderScene] = useState(false);
 
     useEffect(() => {
         let frameId = 0;
@@ -25,7 +30,7 @@ function App()
 
                 setMousePosition({ x, y });
 
-                const roadNetwork = (scene as { roadNetwork?: { getGridFromIso?: (x: number, y: number) => { gridX: number; gridY: number } } }).roadNetwork;
+                const roadNetwork = (scene as any).roadNetwork;
                 if (roadNetwork?.getGridFromIso) {
                     const grid = roadNetwork.getGridFromIso(pointer.worldX ?? pointer.x, pointer.worldY ?? pointer.y);
                     setGridPosition({ x: grid.gridX, y: grid.gridY });
@@ -39,97 +44,99 @@ function App()
         return () => cancelAnimationFrame(frameId);
     }, []);
 
-    const changeScene = () => {
+    useEffect(() => {
+        const handleProposal = (summary: BuildSummary) => {
+            setBuildSummary(summary);
+        };
 
-        if(phaserRef.current)
-        {     
-            const scene = phaserRef.current.scene as MainMenu;
-            
-            if (scene)
-            {
-                scene.changeScene();
-            }
-        }
-    }
+        const handleClear = () => {
+            setBuildSummary(null);
+        };
 
-    const moveSprite = () => {
+        EventBus.on('builder:proposal', handleProposal);
+        EventBus.on('builder:clear', handleClear);
 
-        if(phaserRef.current)
-        {
+        return () => {
+            EventBus.removeListener('builder:proposal', handleProposal);
+            EventBus.removeListener('builder:clear', handleClear);
+        };
+    }, []);
 
-            const scene = phaserRef.current.scene as MainMenu;
+    useEffect(() => {
+        const handleInspect = (summary: RoadSummary) => {
+            setRoadSummary(summary);
+        };
 
-            if (scene && scene.scene.key === 'MainMenu')
-            {
-                // Get the update logo position
-                scene.moveLogo(({ x, y }) => {
+        const handleClear = () => {
+            setRoadSummary(null);
+        };
 
-                    setSpritePosition({ x, y });
+        EventBus.on('road:inspect', handleInspect);
+        EventBus.on('road:clear', handleClear);
 
-                });
-            }
-        }
-
-    }
-
-    const addSprite = () => {
-
-        if (phaserRef.current)
-        {
-            const scene = phaserRef.current.scene;
-
-            if (scene)
-            {
-                // Add more stars
-                const x = Phaser.Math.Between(64, scene.scale.width - 64);
-                const y = Phaser.Math.Between(64, scene.scale.height - 64);
-    
-                //  `add.sprite` is a Phaser GameObjectFactory method and it returns a Sprite Game Object instance
-                const star = scene.add.sprite(x, y, 'star');
-    
-                //  ... which you can then act upon. Here we create a Phaser Tween to fade the star sprite in and out.
-                //  You could, of course, do this from within the Phaser Scene code, but this is just an example
-                //  showing that Phaser objects and systems can be acted upon from outside of Phaser itself.
-                scene.add.tween({
-                    targets: star,
-                    duration: 500 + Math.random() * 1000,
-                    alpha: 0,
-                    yoyo: true,
-                    repeat: -1
-                });
-            }
-        }
-    }
+        return () => {
+            EventBus.removeListener('road:inspect', handleInspect);
+            EventBus.removeListener('road:clear', handleClear);
+        };
+    }, []);
 
     // Event emitted from the PhaserGame component
     const currentScene = (scene: Phaser.Scene) => {
 
-        setCanMoveSprite(scene.scene.key !== 'MainMenu');
+        const builderActive = scene.scene.key === 'LevelBuilder';
+        setIsBuilderScene(builderActive);
+        if (!builderActive) {
+            setBuildMode(false);
+            setBuildSummary(null);
+            setRoadSummary(null);
+        }
         
     }
+
+    const toggleBuildMode = () => {
+        const next = !buildMode;
+        setBuildMode(next);
+        setBuildSummary(null);
+        setRoadSummary(null);
+        EventBus.emit('builder:mode', { enabled: next });
+    };
+
+    const confirmBuild = () => {
+        EventBus.emit('builder:confirm');
+        setBuildSummary(null);
+        setBuildMode(false);
+        EventBus.emit('builder:mode', { enabled: false });
+    };
+
+    const cancelBuild = () => {
+        EventBus.emit('builder:cancel');
+        setBuildSummary(null);
+        setBuildMode(false);
+        EventBus.emit('builder:mode', { enabled: false });
+    };
+
+    const deleteRoad = (name: string) => {
+        EventBus.emit('road:delete', { name });
+        setRoadSummary(null);
+    };
 
     return (
         <div id="app">
             <PhaserGame ref={phaserRef} currentActiveScene={currentScene} />
             <div>
-                <div>
-                    <button className="button" onClick={changeScene}>Change Scene</button>
-                </div>
-                <div>
-                    <button disabled={canMoveSprite} className="button" onClick={moveSprite}>Toggle Movement</button>
-                </div>
-                <div className="spritePosition">Sprite Position:
-                    <pre>{`{\n  x: ${spritePosition.x}\n  y: ${spritePosition.y}\n}`}</pre>
-                </div>
-                <div className="spritePosition">Mouse Position:
-                    <pre>{`{\n  x: ${mousePosition.x}\n  y: ${mousePosition.y}\n}`}</pre>
-                </div>
-                <div className="spritePosition">Grid Segment:
-                    <pre>{`{\n  x: ${gridPosition.x}\n  y: ${gridPosition.y - 1}\n}`}</pre>
-                </div>
-                <div>
-                    <button className="button" onClick={addSprite}>Add New Sprite</button>
-                </div>
+                <PositionPanel
+                    mousePosition={mousePosition}
+                    gridPosition={gridPosition}
+                />
+                <BuildPanel
+                    isBuilderScene={isBuilderScene}
+                    buildMode={buildMode}
+                    buildSummary={buildSummary}
+                    onToggleBuildMode={toggleBuildMode}
+                    onConfirmBuild={confirmBuild}
+                    onCancelBuild={cancelBuild}
+                />
+                <RoadInspector summary={roadSummary} onDelete={deleteRoad} />
             </div>
         </div>
     )
