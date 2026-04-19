@@ -25,19 +25,23 @@ export class Game extends Scene
     create ()
     {
         this.camera = this.cameras.main;
-        this.camera.setBackgroundColor(0x2f9e44);
+        // this.camera.setBackgroundColor(0x2f9e44);
 
         this.background = this.add.image(512, 384, 'background');
-        this.background.setAlpha(0.15);
+        this.background.setAlpha(0);
 
         const grassTileWidth = 120;
         const grassTileHeight = 60;
-        const grassLayerWidth = this.scale.width + (grassTileWidth * 2);
-        const grassLayerHeight = this.scale.height + (grassTileHeight * 2);
+        const worldWidth = 8000;
+        const worldHeight = 8000;
+        const worldX = -worldWidth / 2;
+        const worldY = -worldHeight / 2;
+        const grassLayerWidth = worldWidth + (grassTileWidth * 2);
+        const grassLayerHeight = worldHeight + (grassTileHeight * 2);
 
         const grassBase = this.add.tileSprite(
-            -grassTileWidth,
-            -grassTileHeight,
+            worldX - grassTileWidth,
+            worldY - grassTileHeight,
             grassLayerWidth,
             grassLayerHeight,
             'grass-iso-ns'
@@ -46,14 +50,16 @@ export class Game extends Scene
         grassBase.setDepth(-10);
 
         const grassOffset = this.add.tileSprite(
-            -grassTileWidth / 2,
-            -grassTileHeight / 2,
+            worldX - grassTileWidth / 2,
+            worldY - grassTileHeight / 2,
             grassLayerWidth,
             grassLayerHeight,
             'grass-iso-ns'
         );
         grassOffset.setOrigin(0, 0);
         grassOffset.setDepth(-9);
+
+        this.camera.setBounds(worldX, worldY, grassLayerWidth, grassLayerHeight);
 
         this.roadNetwork = new RoadNetwork(this, 400, 120);
         this.roadNetwork.build([
@@ -166,6 +172,45 @@ export class Game extends Scene
         }
 
         this.trafficLights.push(...this.roadNetwork.getIntersections().flatMap(i => i.getTrafficLights()));
+
+        this.camera.centerOn(400, 120);
+
+        let isDragging = false;
+        let lastX = 0;
+        let lastY = 0;
+        const minZoom = 0.4;
+        const maxZoom = 2.5;
+        const zoomSpeed = 0.0015;
+
+        this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+            if (!pointer.leftButtonDown()) {
+                return;
+            }
+            isDragging = true;
+            lastX = pointer.x;
+            lastY = pointer.y;
+        });
+
+        this.input.on('pointerup', () => {
+            isDragging = false;
+        });
+
+        this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+            if (!isDragging) {
+                return;
+            }
+            const dx = pointer.x - lastX;
+            const dy = pointer.y - lastY;
+            this.camera.scrollX -= dx / this.camera.zoom;
+            this.camera.scrollY -= dy / this.camera.zoom;
+            lastX = pointer.x;
+            lastY = pointer.y;
+        });
+
+        this.input.on('wheel', (_pointer: Phaser.Input.Pointer, _over: any, _dx: number, dy: number) => {
+            const next = Math.min(maxZoom, Math.max(minZoom, this.camera.zoom - dy * zoomSpeed));
+            this.camera.setZoom(next);
+        });
 
         EventBus.emit('current-scene-ready', this);
     }
