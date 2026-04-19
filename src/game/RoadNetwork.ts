@@ -158,7 +158,10 @@ export class RoadNetwork {
     }
 
     getGridFromIso(isoX: number, isoY: number): { gridX: number; gridY: number } {
-        const world = this.fromIsometric(isoX, isoY);
+        const world = this.fromIsometric(
+            isoX - (RoadNetwork.ISO_TILE_WIDTH / 2),
+            isoY - (RoadNetwork.ISO_TILE_HEIGHT / 2)
+        );
         const localX = world.x - this.originX;
         const localY = world.y - this.originY;
 

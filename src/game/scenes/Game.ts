@@ -68,33 +68,88 @@ export class Game extends Scene
         ]);
 
 
-        const northbound = this.roadNetwork.getRoadByName('northbound');
+        const eastbound = this.roadNetwork.getRoadByName('eastbound');
+        const westbound = this.roadNetwork.getRoadByName('westbound');
         const southbound = this.roadNetwork.getRoadByName('southbound');
-        const eastboundRoad = this.roadNetwork.getRoadByName('eastbound');
+        const northbound = this.roadNetwork.getRoadByName('northbound');
+        const northbound2 = this.roadNetwork.getRoadByName('northbound2');
+        const northboundBase = northbound?.blocks[northbound.blocks.length - 1];
+        const northbound2Base = northbound2?.blocks[northbound2.blocks.length - 1];
+        const northboundEnd = northbound?.blocks[0];
+        const northbound2End = northbound2?.blocks[0];
+        const southboundBase = southbound?.blocks[0];
+        const westboundEnd = westbound?.blocks[0];
+        const eastboundBase = eastbound?.blocks[0];
 
-        let src = northbound?.getBlock(northbound.blocks.length - 1);
-        let dest = eastboundRoad?.getBlock(eastboundRoad.blocks.length - 1);
-        if (northbound && src && dest) {
-            this.spawnCar(
-                northbound,
-                60,
-                { x: src.gridX, y: src.gridY },
-                { x: dest.gridX, y: dest.gridY }
-            );
-        }
+        const routes = [
+            { 
+                source: {
+                    x: northboundBase?.gridX,
+                    y: northboundBase?.gridY,
+                    road: 'northbound'
+                },
+                destinations: [
+                    { x: northboundEnd?.gridX, y: northboundEnd?.gridY },
+                    { x: northbound2End?.gridX, y: northbound2End?.gridY },
+                    { x: westboundEnd?.gridX, y: westboundEnd?.gridY }
+                ],
+            },
+            {
+                source: {
+                    x: southboundBase?.gridX,
+                    y: southboundBase?.gridY,
+                    road: 'southbound'
+                },
+                destinations: [
+                    { x: westboundEnd?.gridX, y: westboundEnd?.gridY },
+                    { x: northbound2End?.gridX, y: northbound2End?.gridY },
+                ]
+            },
+            {
+                source: {
+                    x: northbound2Base?.gridX,
+                    y: northbound2Base?.gridY,
+                    road: 'northbound2'
+                },
+                destinations: [
+                    { x: northbound2End?.gridX, y: northbound2End?.gridY },
+                    { x: northboundEnd?.gridX, y: northboundEnd?.gridY },
+                    { x: westboundEnd?.gridX, y: westboundEnd?.gridY }
+                ]
+            },
+            {
+                source: {
+                    x: eastboundBase?.gridX,
+                    y: eastboundBase?.gridY,
+                    road: 'eastbound'
+                },
+                destinations: [
+                    { x: northbound2End?.gridX, y: northbound2End?.gridY },
+                    { x: westboundEnd?.gridX, y: westboundEnd?.gridY },
+                    { x: northboundEnd?.gridX, y: northboundEnd?.gridY }
+                ]
+            }
+        ]
 
-        src = southbound?.getBlock(0);
-        if (southbound && src) {
-            dest = eastboundRoad?.getBlock(eastboundRoad.blocks.length - 1);
-            if (dest) {
+        const minSpawnDelayMs = 700;
+        const maxSpawnDelayMs = 1600;
+
+        const scheduleSpawn = () => {
+            for (const route of routes) {
+                const randomDest = Phaser.Utils.Array.GetRandom(route.destinations);
                 this.spawnCar(
-                    southbound,
+                    this.roadNetwork.getRoadByName(route.source.road)!,
                     60,
-                    { x: src.gridX, y: src.gridY },
-                    { x: dest.gridX, y: dest.gridY }
+                    { x: route.source.x!, y: route.source.y! },
+                    { x: randomDest.x!, y: randomDest.y! }
                 );
             }
-        }
+
+            const nextDelay = Phaser.Math.Between(minSpawnDelayMs, maxSpawnDelayMs);
+            this.time.delayedCall(nextDelay, scheduleSpawn);
+        };
+
+        scheduleSpawn();
 
         this.camera.centerOn(400, 120);
 
@@ -160,7 +215,18 @@ export class Game extends Scene
 
     update (_time: number, delta: number)
     {
-        this.cars.forEach((car) => car.update(delta));
+        for (let i = this.cars.length - 1; i >= 0; i -= 1) {
+            const car = this.cars[i];
+            if (!car) {
+                continue;
+            }
+
+            if (car.update(delta)) {
+                car.destroy();
+                this.cars.splice(i, 1);
+                this.navigators.splice(i, 1);
+            }
+        }
     }
 
     changeScene ()

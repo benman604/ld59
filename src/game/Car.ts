@@ -32,13 +32,13 @@ export class Car {
         }
     }
 
-    update(deltaMs: number): void {
+    update(deltaMs: number): boolean {
         if (this.path.length < 2) {
-            return;
+            return this.finished;
         }
 
         if (this.finished) {
-            return;
+            return true;
         }
 
         let remaining = (this.speed * deltaMs) / 1000;
@@ -49,7 +49,7 @@ export class Car {
 
             if (!this.loop && nextIndex >= this.path.length) {
                 this.finished = true;
-                return;
+                return true;
             }
 
             const resolvedNextIndex = this.loop
@@ -88,10 +88,16 @@ export class Car {
                 }
             }
         }
+
+        return this.finished;
     }
 
     setSpeed(speed: number): void {
         this.speed = speed;
+    }
+
+    destroy(): void {
+        this.sprite.destroy();
     }
 
     private updateDirection(dx: number, dy: number): void {

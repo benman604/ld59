@@ -162,7 +162,7 @@ export class Intersection extends Block {
             line.setDepth(this.sprite.depth + 1);
             this.trafficLightLines.push(line);
 
-            light.render(this.scene, pos.x, pos.y, this.sprite.depth + 5, 2);
+            light.render(this.scene, pos.x, pos.y, this.sprite.depth + 5000, 2);
         });
     }
 }
