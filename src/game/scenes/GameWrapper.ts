@@ -6,12 +6,7 @@ import { Navigator } from '../Navigator';
 import { Road } from '../Road';
 import { Block } from '../Block';
 import { Layers } from '../../types';
-
-export type Route = {
-    road: Road;
-    source: Block;
-    destinations: Block[];
-};
+import { Route } from '../Route';
 
 export abstract class GameWrapper extends Scene
 {
@@ -94,15 +89,15 @@ export abstract class GameWrapper extends Scene
 
     protected abstract setupLevel(): void;
 
-    protected startSpawning(routes: Route[], minDelayMs: number, maxDelayMs: number, speed: number): void {
+    protected startSpawning(routeGroups: Route[][], minDelayMs: number, maxDelayMs: number, speed: number): void {
         const scheduleSpawn = () => {
-            for (const route of routes) {
-                if (!route.destinations.length) {
+            for (const group of routeGroups) {
+                if (!group.length) {
                     continue;
                 }
 
-                const randomDest = Phaser.Utils.Array.GetRandom(route.destinations);
-                this.spawnCar(route.road, speed, route.source, randomDest);
+                const route = Phaser.Utils.Array.GetRandom(group);
+                this.spawnCar(route.road, speed, route.source, route.destination);
             }
 
             const nextDelay = Phaser.Math.Between(minDelayMs, maxDelayMs);

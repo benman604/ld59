@@ -2,7 +2,8 @@ import { GameObjects } from 'phaser';
 import { RoadNetwork } from '../RoadNetwork';
 import { Road } from '../Road';
 import { Block } from '../Block';
-import { GameWrapper, Route } from './GameWrapper';
+import { GameWrapper } from './GameWrapper';
+import { Route } from '../Route';
 import { Layers } from '../../types';
 
 type MenuButton = {
@@ -43,7 +44,7 @@ export class MainMenu extends GameWrapper
             this.logoTween = null;
         }
 
-        this.scene.start('Level1');
+        this.scene.start('TestGame');
     }
 
     moveLogo (vueCallback: ({ x, y }: { x: number, y: number }) => void)
@@ -101,23 +102,18 @@ export class MainMenu extends GameWrapper
 
         for (const name of westboundNames) {
             const road = this.roadNetwork.getRoadByName(name);
-            this.pushRoute(routes, road, road?.getBase(), [road?.getEnd()]);
+            this.pushRoute(routes, road, road?.getBase(), road?.getEnd());
         }
 
         for (const name of eastboundNames) {
             const road = this.roadNetwork.getRoadByName(name);
-            this.pushRoute(routes, road, road?.getBase(), [road?.getEnd()]);
+            this.pushRoute(routes, road, road?.getBase(), road?.getEnd());
         }
 
         this.startDynamicSpawning(routes);
         this.menuZoom = 1;
         this.camera.setZoom(this.menuZoom);
 
-        const openingX = -7;
-        const openingRows = [1, 2, 3, 5, 6, 7];
-        for (const row of openingRows) {
-            this.createGridSprite('opening_nw', openingX, row - 1, { depth: Layers.Openings });
-        }
     }
 
     private createMenuUi(): void {
@@ -154,18 +150,9 @@ export class MainMenu extends GameWrapper
     }
 
     private scheduleRouteSpawn(route: Route, minDelay: number, maxDelay: number): void {
-        if (!route.destinations.length) {
-            return;
-        }
-
         const spawnOnce = () => {
-            if (!route.destinations.length) {
-                return;
-            }
-
-            const destination = Phaser.Utils.Array.GetRandom(route.destinations);
             const speed = Phaser.Math.Between(35, 75);
-            this.spawnCar(route.road, speed, route.source, destination);
+            this.spawnCar(route.road, speed, route.source, route.destination);
 
             const drift = Phaser.Math.Between(-200, 300);
             const nextMin = Math.max(200, minDelay + drift);
@@ -289,21 +276,12 @@ export class MainMenu extends GameWrapper
         routes: Route[],
         road: Road | undefined,
         source: Block | undefined,
-        destinations: Array<Block | undefined>
+        destination: Block | undefined
     ): void {
-        if (!road || !source) {
+        if (!road || !source || !destination) {
             return;
         }
 
-        const validDestinations = destinations.filter((dest): dest is Block => !!dest);
-        if (!validDestinations.length) {
-            return;
-        }
-
-        routes.push({
-            road,
-            source,
-            destinations: validDestinations
-        });
+        routes.push(new Route(this, this.roadNetwork, road, source, destination));
     }
 }

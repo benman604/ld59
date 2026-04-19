@@ -88,10 +88,7 @@ export class Car {
                 continue;
             }
 
-            const currentBlock = this.blockPath[this.segmentIndex] ?? null;
-            const holdIndex = currentBlock instanceof Intersection
-                ? null
-                : this.getHoldIndex(this.segmentIndex);
+            const holdIndex = this.getHoldIndex(this.segmentIndex);
             const shouldHold = holdIndex !== null && this.segmentIndex === holdIndex;
             const remainingOnSegment = segmentLength - this.distanceAlongSegment;
             const holdDistance = shouldHold
@@ -99,11 +96,6 @@ export class Car {
                 : segmentLength;
 
             if (shouldHold && this.distanceAlongSegment >= holdDistance) {
-                const tHold = segmentLength === 0 ? 0 : holdDistance / segmentLength;
-                this.sprite.setPosition(
-                    current.x + dx * tHold,
-                    current.y + dy * tHold
-                );
                 this.updateDirection(dx, dy);
                 break;
             }
@@ -112,11 +104,6 @@ export class Car {
                 ? Math.max(0, Math.min(remainingOnSegment, holdDistance - this.distanceAlongSegment))
                 : remainingOnSegment;
             if (shouldHold && maxAdvance <= 0) {
-                const tHold = segmentLength === 0 ? 0 : holdDistance / segmentLength;
-                this.sprite.setPosition(
-                    current.x + dx * tHold,
-                    current.y + dy * tHold
-                );
                 this.updateDirection(dx, dy);
                 break;
             }
@@ -144,11 +131,6 @@ export class Car {
                     this.sprite.setPosition(this.path[0].x, this.path[0].y);
                 }
             } else if (shouldHold && this.distanceAlongSegment >= holdDistance) {
-                const tHold = segmentLength === 0 ? 0 : holdDistance / segmentLength;
-                this.sprite.setPosition(
-                    current.x + dx * tHold,
-                    current.y + dy * tHold
-                );
                 this.updateDirection(dx, dy);
                 break;
             }
@@ -195,9 +177,6 @@ export class Car {
     }
 
     private getHoldIndex(startIndex: number): number | null {
-        const currentBlock = this.blockPath[startIndex] ?? null;
-        const currentIsIntersection = currentBlock instanceof Intersection;
-
         for (let i = startIndex + 1; i < this.blockPath.length; i += 1) {
             const block = this.blockPath[i];
             if (!block) {
@@ -205,7 +184,7 @@ export class Car {
             }
 
             if (this.isOccupiedByOther(block)) {
-                return Math.max(i - 2, startIndex);
+                return Math.max(i - 1, startIndex);
             }
 
             if (!(block instanceof Intersection)) {
@@ -231,12 +210,7 @@ export class Car {
                 return null;
             }
 
-            const stopIndex = Math.max(i - 2, startIndex);
-            if (currentIsIntersection && stopIndex <= startIndex) {
-                return null;
-            }
-
-            return stopIndex;
+            return Math.max(i - 1, startIndex);
         }
 
         return null;

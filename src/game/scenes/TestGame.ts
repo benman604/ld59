@@ -1,7 +1,8 @@
 import { RoadNetwork } from '../RoadNetwork';
 import { Road } from '../Road';
 import { Block } from '../Block';
-import { GameWrapper, Route } from './GameWrapper';
+import { GameWrapper } from './GameWrapper';
+import { Route } from '../Route';
 import { Layers } from '../../types';
 
 export class TestGame extends GameWrapper
@@ -30,16 +31,6 @@ export class TestGame extends GameWrapper
         this.createGridSprite('skyscraper', 11, 4, { depth: Layers.Buildings });
         this.createGridSprite('skyscraper', 13, 4, { depth: Layers.Buildings });
 
-        this.createGridSprite('opening_ne', 4, -11, { depth: Layers.Openings });
-        this.createGridSprite('opening_ne', 5, -11, { depth: Layers.Openings });
-        this.createGridSprite('opening_ne', 23, -11, { depth: Layers.Openings });
-
-        this.createGridSprite('opening_hidden', 5, 19, { depth: Layers.Openings });
-        this.createGridSprite('opening_hidden', 23, 19, { depth: Layers.Openings });
-
-        this.createGridSprite('opening_nw', -12, 3, { depth: Layers.Openings });
-        this.createGridSprite('opening_nw', -12, 9, { depth: Layers.Openings });
-
         const eastbound = this.roadNetwork.getRoadByName('eastbound');
         const westbound = this.roadNetwork.getRoadByName('westbound');
         const southbound = this.roadNetwork.getRoadByName('southbound');
@@ -54,36 +45,36 @@ export class TestGame extends GameWrapper
         const westboundEnd = westbound?.getEnd();
         const eastboundBase = eastbound?.getBase();
 
-        const routes: Route[] = [];
+        const routeGroups: Route[][] = [];
 
-        this.pushRoute(routes, northbound, northboundBase, [
+        this.pushRouteGroup(routeGroups, northbound, northboundBase, [
             northboundEnd,
             northbound2End,
             westboundEnd
         ]);
 
-        this.pushRoute(routes, southbound, southboundBase, [
+        this.pushRouteGroup(routeGroups, southbound, southboundBase, [
             westboundEnd,
             northbound2End
         ]);
 
-        this.pushRoute(routes, northbound2, northbound2Base, [
+        this.pushRouteGroup(routeGroups, northbound2, northbound2Base, [
             northbound2End,
             northboundEnd,
             westboundEnd
         ]);
 
-        this.pushRoute(routes, eastbound, eastboundBase, [
+        this.pushRouteGroup(routeGroups, eastbound, eastboundBase, [
             northbound2End,
             westboundEnd,
             northboundEnd
         ]);
 
-        this.startSpawning(routes, 700, 1600, 60);
+        this.startSpawning(routeGroups, 700, 1600, 60);
     }
 
-    private pushRoute(
-        routes: Route[],
+    private pushRouteGroup(
+        routeGroups: Route[][],
         road: Road | undefined,
         source: Block | undefined,
         destinations: Array<Block | undefined>
@@ -97,10 +88,7 @@ export class TestGame extends GameWrapper
             return;
         }
 
-        routes.push({
-            road,
-            source,
-            destinations: validDestinations
-        });
+        const routes = validDestinations.map(destination => new Route(this, this.roadNetwork, road, source, destination));
+        routeGroups.push(routes);
     }
 }

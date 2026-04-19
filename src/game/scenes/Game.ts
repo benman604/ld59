@@ -77,17 +77,6 @@ export class Game extends Scene
         this.createGridSprite('skyscraper', 11, 4, { depth: Layers.Buildings });
         this.createGridSprite('skyscraper', 13, 4, { depth: Layers.Buildings });
 
-        this.createGridSprite('opening_ne', 4, -11, { depth: Layers.Openings });
-        this.createGridSprite('opening_ne', 5, -11, { depth: Layers.Openings });
-        this.createGridSprite('opening_ne', 23, -11, { depth: Layers.Openings });
-
-        this.createGridSprite('opening_hidden', 5, 19, { depth: Layers.Openings });
-        this.createGridSprite('opening_hidden', 23, 19, { depth: Layers.Openings });
-
-        this.createGridSprite('opening_nw', -12, 3, { depth: Layers.Openings });
-        this.createGridSprite('opening_nw', -12, 9, { depth: Layers.Openings });
-
-
         const eastbound = this.roadNetwork.getRoadByName('eastbound');
         const westbound = this.roadNetwork.getRoadByName('westbound');
         const southbound = this.roadNetwork.getRoadByName('southbound');

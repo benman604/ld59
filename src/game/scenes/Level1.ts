@@ -1,9 +1,8 @@
 import { RoadNetwork } from '../RoadNetwork';
-import { Road } from '../Road';
-import { Block } from '../Block';
 import { GameWrapper } from './GameWrapper';
 import { Layers } from '../../types';
 import { Car } from '../Car';
+import { Route } from '../Route';
 
 export class Level1 extends GameWrapper
 {
@@ -39,11 +38,13 @@ export class Level1 extends GameWrapper
         const eastboundEnd = eastbound?.getEnd();
 
         if (northbound && northboundBase && northboundEnd) {
-            this.scheduleRouteSpawning(northbound, northboundBase, northboundEnd, 'ns');
+            const route = new Route(this, this.roadNetwork, northbound, northboundBase, northboundEnd);
+            this.scheduleRouteSpawning(route, 'ns');
         }
 
         if (eastbound && eastboundBase && eastboundEnd) {
-            this.scheduleRouteSpawning(eastbound, eastboundBase, eastboundEnd, 'ew');
+            const route = new Route(this, this.roadNetwork, eastbound, eastboundBase, eastboundEnd);
+            this.scheduleRouteSpawning(route, 'ew');
         }
 
         this.countsText = this.add.text(24, 24, '', {
@@ -73,9 +74,9 @@ export class Level1 extends GameWrapper
         this.updateCountsText();
     }
 
-    private scheduleRouteSpawning(road: Road, source: Block, destination: Block, routeKey: 'ns' | 'ew'): void {
+    private scheduleRouteSpawning(route: Route, routeKey: 'ns' | 'ew'): void {
         const spawnOnce = () => {
-            const car = this.spawnCar(road, 60, source, destination);
+            const car = this.spawnCar(route.road, 60, route.source, route.destination);
             if (car) {
                 this.carRoutes.set(car, routeKey);
             }
