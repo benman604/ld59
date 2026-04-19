@@ -447,9 +447,13 @@ export class LevelBuilder extends GameWrapper
     }
 
     private createRoadSpec(start: GridPoint, end: GridPoint): RoadSpec {
+        const directionLabel = this.getDirectionLabel(start, end);
+        const index = this.countDirectionRoads(directionLabel) + 1;
+        const name = `${directionLabel} ${index}`;
+
         if (start.gridY === end.gridY) {
             return {
-                name: `road-ew-${start.gridX}-${end.gridX}-${start.gridY}`,
+                name,
                 orientation: 'ew',
                 direction: end.gridX >= start.gridX ? 'e' : 'w',
                 startX: start.gridX,
@@ -459,13 +463,33 @@ export class LevelBuilder extends GameWrapper
         }
 
         return {
-            name: `road-ns-${start.gridY}-${end.gridY}-${start.gridX}`,
+            name,
             orientation: 'ns',
             direction: end.gridY >= start.gridY ? 's' : 'n',
             startY: start.gridY,
             endY: end.gridY,
             x: start.gridX
         };
+    }
+
+    private countDirectionRoads(directionLabel: string): number {
+        return this.roadSpecs.filter((spec) => this.getDirectionLabelFromSpec(spec) === directionLabel).length;
+    }
+
+    private getDirectionLabel(start: GridPoint, end: GridPoint): string {
+        if (start.gridY === end.gridY) {
+            return end.gridX >= start.gridX ? 'Eastbound' : 'Westbound';
+        }
+
+        return end.gridY >= start.gridY ? 'Southbound' : 'Northbound';
+    }
+
+    private getDirectionLabelFromSpec(spec: RoadSpec): string {
+        if (spec.orientation === 'ew') {
+            return spec.direction === 'e' ? 'Eastbound' : 'Westbound';
+        }
+
+        return spec.direction === 's' ? 'Southbound' : 'Northbound';
     }
 
     private getPathCells(start: GridPoint, end: GridPoint): { cells: GridPoint[]; orientation: 'ew' | 'ns' } {
