@@ -58,14 +58,28 @@ export class RoadNetwork {
     }
 
     configureTrafficLights(): void {
-        const isStub = (road: Road, gridX: number, gridY: number) => {
+        const hasIncomingSegment = (road: Road, gridX: number, gridY: number) => {
+            if (road.orientation === 'ew') {
+                const step = road.direction === 'we' ? 1 : -1;
+                return !!road.getBlockAt(gridX + step, gridY);
+            }
+
+            const step = road.direction === 'sn' ? 1 : -1;
+            return !!road.getBlockAt(gridX, gridY + step);
+        };
+
+        const hasOutgoingSegment = (road: Road, gridX: number, gridY: number) => {
             if (road.orientation === 'ew') {
                 const step = road.direction === 'we' ? -1 : 1;
-                return !road.getBlockAt(gridX + step, gridY);
+                return !!road.getBlockAt(gridX + step, gridY);
             }
 
             const step = road.direction === 'sn' ? -1 : 1;
-            return !road.getBlockAt(gridX, gridY + step);
+            return !!road.getBlockAt(gridX, gridY + step);
+        };
+
+        const isTerminatingRoad = (road: Road, gridX: number, gridY: number) => {
+            return hasIncomingSegment(road, gridX, gridY) && !hasOutgoingSegment(road, gridX, gridY);
         };
 
         const shouldPlaceEwLight = (intersection: Intersection, ewRoad: Road | undefined, nsRoad: Road | undefined) => {
@@ -110,7 +124,10 @@ export class RoadNetwork {
             const nsRoad = ns[0];
             const ewRoad = ew[0];
 
-            if (nsRoad && !isStub(nsRoad, intersection.gridX, intersection.gridY)) {
+            const nsIncoming = !!nsRoad && hasIncomingSegment(nsRoad, intersection.gridX, intersection.gridY);
+            const nsTerminating = !!nsRoad && isTerminatingRoad(nsRoad, intersection.gridX, intersection.gridY);
+
+            if (nsRoad && nsIncoming) {
                 if (nsRoad.direction === 'sn') {
                     intersection.addTrafficLight('n', new TrafficLight('red'));
                 }
@@ -119,7 +136,9 @@ export class RoadNetwork {
                 }
             }
 
-            if (ewRoad && !isStub(ewRoad, intersection.gridX, intersection.gridY) && shouldPlaceEwLight(intersection, ewRoad, nsRoad)) {
+            const ewIncoming = !!ewRoad && hasIncomingSegment(ewRoad, intersection.gridX, intersection.gridY);
+
+            if (ewRoad && ewIncoming && !nsTerminating && shouldPlaceEwLight(intersection, ewRoad, nsRoad)) {
                 if (ewRoad.direction === 'we') {
                     intersection.addTrafficLight('w', new TrafficLight('red'));
                 }
