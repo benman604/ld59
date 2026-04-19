@@ -117,4 +117,23 @@ export class TrafficLight {
             this.sprite.setTexture(this.getTextureKey());
         }
     }
+
+    destroy(): void {
+        if (this.yellowTimer) {
+            this.yellowTimer.remove(false);
+            this.yellowTimer = undefined;
+        }
+
+        if (this.sprite) {
+            this.sprite.destroy();
+            this.sprite = undefined;
+        }
+
+        if (this.hoverBorder) {
+            this.hoverBorder.destroy();
+            this.hoverBorder = undefined;
+        }
+
+        this.scene = undefined;
+    }
 }

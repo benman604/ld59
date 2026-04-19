@@ -90,6 +90,7 @@ export class RoadNetwork {
         };
 
         for (const intersection of this.getIntersections()) {
+            intersection.clearTrafficLights();
             const { ns, ew } = intersection.getConnectedRoads();
 
             for (const nsRoad of ns) {

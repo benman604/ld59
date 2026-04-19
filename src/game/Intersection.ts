@@ -94,6 +94,19 @@ export class Intersection extends Block {
         this.syncTrafficLightSprites();
     }
 
+    clearTrafficLights(): void {
+        (Object.keys(this.trafficLights) as Dir[]).forEach((dir) => {
+            const light = this.trafficLights[dir];
+            if (light) {
+                light.destroy();
+            }
+            this.trafficLights[dir] = null;
+        });
+
+        this.trafficLightLines.forEach(line => line.destroy());
+        this.trafficLightLines = [];
+    }
+
     getConnectedRoads(): { ns: Road[]; ew: Road[] } {
         return { ns: [...this.nsRoads], ew: [...this.ewRoads] };
     }
@@ -105,6 +118,11 @@ export class Intersection extends Block {
     getTrafficLightState(direction: Dir): TrafficLightState | null {
         const light = this.trafficLights[direction];
         return light ? light.getCurrentState() : null;
+    }
+
+    destroy(): void {
+        this.clearTrafficLights();
+        super.destroy();
     }
 
     private syncTrafficLightSprites(): void {
