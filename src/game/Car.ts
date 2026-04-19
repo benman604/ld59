@@ -3,22 +3,33 @@ import { Road } from './Road';
 export type CarDirection = 'sw' | 'se' | 'ne' | 'nw';
 
 export class Car {
-    private scene: Phaser.Scene;
-    private road: Road;
     private speed: number;
     private sprite: Phaser.GameObjects.Image;
     private path: { x: number; y: number }[] = [];
     private segmentIndex = 0;
     private distanceAlongSegment = 0;
+    private loop = true;
+    private finished = false;
 
     constructor(scene: Phaser.Scene, road: Road, speed: number) {
-        this.scene = scene;
-        this.road = road;
         this.speed = speed;
         this.path = road.getPathPoints();
 
         const start = this.path[0] ?? { x: 0, y: 0 };
         this.sprite = scene.add.image(start.x, start.y, 'car-se');
+        this.sprite.setDepth(1000);
+    }
+
+    setPathPoints(points: { x: number; y: number }[], loop: boolean = false): void {
+        this.path = points;
+        this.segmentIndex = 0;
+        this.distanceAlongSegment = 0;
+        this.loop = loop;
+        this.finished = false;
+
+        if (this.path.length > 0) {
+            this.sprite.setPosition(this.path[0].x, this.path[0].y);
+        }
     }
 
     update(deltaMs: number): void {
@@ -26,12 +37,25 @@ export class Car {
             return;
         }
 
+        if (this.finished) {
+            return;
+        }
+
         let remaining = (this.speed * deltaMs) / 1000;
 
         while (remaining > 0) {
             const current = this.path[this.segmentIndex];
-            const nextIndex = (this.segmentIndex + 1) % this.path.length;
-            const next = this.path[nextIndex];
+            const nextIndex = this.segmentIndex + 1;
+
+            if (!this.loop && nextIndex >= this.path.length) {
+                this.finished = true;
+                return;
+            }
+
+            const resolvedNextIndex = this.loop
+                ? nextIndex % this.path.length
+                : nextIndex;
+            const next = this.path[resolvedNextIndex];
 
             const dx = next.x - current.x;
             const dy = next.y - current.y;
@@ -56,10 +80,10 @@ export class Car {
             this.updateDirection(dx, dy);
 
             if (this.distanceAlongSegment >= segmentLength) {
-                this.segmentIndex = nextIndex;
+                this.segmentIndex = resolvedNextIndex;
                 this.distanceAlongSegment = 0;
 
-                if (this.segmentIndex === 0) {
+                if (this.loop && this.segmentIndex === 0) {
                     this.sprite.setPosition(this.path[0].x, this.path[0].y);
                 }
             }

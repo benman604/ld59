@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { IRefPhaserGame, PhaserGame } from './PhaserGame';
 import { MainMenu } from './game/scenes/MainMenu';
+import { Game as GameScene } from './game/scenes/Game';
 
 function App()
 {
@@ -10,6 +11,37 @@ function App()
     //  References to the PhaserGame component (game and scene are exposed)
     const phaserRef = useRef<IRefPhaserGame | null>(null);
     const [spritePosition, setSpritePosition] = useState({ x: 0, y: 0 });
+    const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+    const [gridPosition, setGridPosition] = useState({ x: 0, y: 0 });
+
+    useEffect(() => {
+        let frameId = 0;
+
+        const tick = () => {
+            const scene = phaserRef.current?.scene;
+            if (scene && scene.input && scene.input.activePointer) {
+                const pointer = scene.input.activePointer;
+                const x = Math.round(pointer.worldX ?? pointer.x);
+                const y = Math.round(pointer.worldY ?? pointer.y);
+
+                setMousePosition({ x, y });
+
+                if (scene.scene.key === 'Game') {
+                    const gameScene = scene as GameScene;
+                    const roadNetwork = gameScene.roadNetwork;
+                    if (roadNetwork) {
+                        const grid = roadNetwork.getGridFromIso(pointer.worldX ?? pointer.x, pointer.worldY ?? pointer.y);
+                        setGridPosition({ x: grid.gridX, y: grid.gridY });
+                    }
+                }
+            }
+
+            frameId = requestAnimationFrame(tick);
+        };
+
+        frameId = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(frameId);
+    }, []);
 
     const changeScene = () => {
 
@@ -92,6 +124,12 @@ function App()
                 </div>
                 <div className="spritePosition">Sprite Position:
                     <pre>{`{\n  x: ${spritePosition.x}\n  y: ${spritePosition.y}\n}`}</pre>
+                </div>
+                <div className="spritePosition">Mouse Position:
+                    <pre>{`{\n  x: ${mousePosition.x}\n  y: ${mousePosition.y}\n}`}</pre>
+                </div>
+                <div className="spritePosition">Grid Segment:
+                    <pre>{`{\n  x: ${gridPosition.x}\n  y: ${gridPosition.y}\n}`}</pre>
                 </div>
                 <div>
                     <button className="button" onClick={addSprite}>Add New Sprite</button>

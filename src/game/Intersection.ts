@@ -1,11 +1,24 @@
 import { Block } from './Block';
 import { TrafficLight } from './TrafficLight';
+import { RoadNetwork } from './RoadNetwork';
 import { Road } from './Road';
+import { Dir, rgb } from '../types';
 
 export class Intersection extends Block {
     private nsRoads: Road[] = [];
     private ewRoads: Road[] = [];
-    private trafficLights: TrafficLight[] = [];
+    // NS, SN, EW, WE order
+    private trafficLights: Record<Dir, TrafficLight | null> = {
+        n: null,
+        s: null,
+        e: null,
+        w: null
+    };
+    private trafficLightSprites: Phaser.GameObjects.Image[] = [];
+    private trafficLightLines: Phaser.GameObjects.Graphics[] = [];
+
+    private static readonly TRAFFIC_LIGHT_X_OFFSET = 25;
+    private static readonly TRAFFIC_LIGHT_Y_OFFSET = 55;
 
     private static readonly TEXTURE_KEY = 'intersection-iso';
     private static readonly TILE_WIDTH = 60;
@@ -13,6 +26,7 @@ export class Intersection extends Block {
 
     constructor(
         scene: Phaser.Scene,
+        roadNetwork: RoadNetwork,
         worldX: number,
         worldY: number,
         gridX: number,
@@ -21,6 +35,7 @@ export class Intersection extends Block {
         Intersection.ensureTexture(scene);
         super(
             scene,
+            roadNetwork,
             worldX,
             worldY,
             gridX,
@@ -74,8 +89,14 @@ export class Intersection extends Block {
         }
     }
 
-    addTrafficLight(light: TrafficLight): void {
-        this.trafficLights.push(light);
+    addTrafficLight(direction: Dir, light: TrafficLight): void {
+        if (direction == "n") {
+            light.setState('green');
+        } else {
+            light.setState('red');
+        }
+        this.trafficLights[direction] = light;
+        this.syncTrafficLightSprites();
     }
 
     getConnectedRoads(): { ns: Road[]; ew: Road[] } {
@@ -83,6 +104,71 @@ export class Intersection extends Block {
     }
 
     getTrafficLights(): TrafficLight[] {
-        return [...this.trafficLights];
+        return Object.values(this.trafficLights).filter((light): light is TrafficLight => light !== null);
+    }
+
+    private syncTrafficLightSprites(): void {
+        this.trafficLightSprites.forEach(sprite => sprite.destroy());
+        this.trafficLightSprites = [];
+        this.trafficLightLines.forEach(line => line.destroy());
+        this.trafficLightLines = [];
+
+        const cx = this.sprite.x;
+        const cy = this.sprite.y;
+        const xOff = Intersection.TRAFFIC_LIGHT_X_OFFSET;
+        const yOff = Intersection.TRAFFIC_LIGHT_Y_OFFSET;
+
+        const edgeXOff = Intersection.TILE_WIDTH / 4;
+        const edgeYOff = Intersection.TILE_HEIGHT / 4;
+
+        const positions: Record<Dir, { x: number; y: number; edgeX: number; edgeY: number }> = {
+            n: {
+                x: cx + xOff,
+                y: cy - yOff,
+                edgeX: cx + edgeXOff,
+                edgeY: cy - edgeYOff
+            },
+            s: {
+                x: cx - xOff,
+                y: cy + yOff,
+                edgeX: cx - edgeXOff,
+                edgeY: cy + edgeYOff
+            },
+            e: {
+                x: cx + xOff,
+                y: cy + yOff,
+                edgeX: cx + edgeXOff,
+                edgeY: cy + edgeYOff
+            },
+            w: {
+                x: cx - xOff,
+                y: cy - yOff,
+                edgeX: cx - edgeXOff,
+                edgeY: cy - edgeYOff
+            }
+        };
+
+        (Object.keys(this.trafficLights) as Dir[]).forEach((dir) => {
+            const light = this.trafficLights[dir];
+            if (!light) {
+                return;
+            }
+
+            const pos = positions[dir];
+            
+            const line = this.scene.add.graphics();
+            line.lineStyle(2, rgb(201, 201, 201), 0.7);
+            line.beginPath();
+            line.moveTo(pos.x, pos.y);
+            line.lineTo(pos.edgeX, pos.edgeY);
+            line.strokePath();
+            line.setDepth(this.sprite.depth + 1);
+            this.trafficLightLines.push(line);
+            
+            const sprite = this.scene.add.image(pos.x, pos.y, light.getTextureKey());
+            sprite.setDepth(this.sprite.depth + 5);
+            sprite.setScale(2);
+            this.trafficLightSprites.push(sprite);
+        });
     }
 }

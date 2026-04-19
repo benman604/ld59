@@ -1,8 +1,11 @@
+import type { RoadNetwork } from './RoadNetwork';
 export type BlockNeighborDirection = 'north' | 'south' | 'east' | 'west';
 
 export class Block {
     static readonly SIZE = 30;
 
+    protected readonly scene: Phaser.Scene;
+    readonly roadNetwork: RoadNetwork;
     readonly gridX: number;
     readonly gridY: number;
     readonly sprite: Phaser.GameObjects.Image;
@@ -14,6 +17,7 @@ export class Block {
 
     constructor(
         scene: Phaser.Scene,
+        roadNetwork: RoadNetwork,
         worldX: number,
         worldY: number,
         gridX: number,
@@ -24,6 +28,8 @@ export class Block {
         displayWidth: number = Block.SIZE,
         displayHeight: number = Block.SIZE
     ) {
+        this.scene = scene;
+        this.roadNetwork = roadNetwork;
         this.gridX = gridX;
         this.gridY = gridY;
         this.sprite = scene.add.image(worldX, worldY, textureKey);

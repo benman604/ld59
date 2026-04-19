@@ -22,9 +22,17 @@ export class TrafficLight {
         return `assets/traffic_light_${this.currentState}.png`;
     }
 
+    getTextureKey(): string {
+        return `traffic-light-${this.currentState}`;
+    }
+
     cycleToNextState(): TrafficLightState {
         this.stateIndex = (this.stateIndex + 1) % this.states.length;
         this.currentState = this.states[this.stateIndex];
         return this.currentState;
+    }
+
+    setState(state: TrafficLightState): void {
+        this.setCurrentState(state);
     }
 }
