@@ -2,7 +2,7 @@ import { Block } from './Block';
 import { Intersection } from './Intersection';
 import { Road, RoadSpec } from './Road';
 import { TrafficLight } from './TrafficLight';
-import { Dir, LaneDirectionEW, LaneDirectionNS } from '../types';
+import { Dir, LaneDirectionEW, LaneDirectionNS, Layers } from '../types';
 
 const arrowEvery = 4;
 
@@ -384,7 +384,7 @@ export class RoadNetwork {
 
                 const textureKey = this.getArrowTextureKey(road.direction);
                 const sprite = this.scene.add.image(activeBlock.sprite.x, activeBlock.sprite.y, textureKey);
-                sprite.setDepth(activeBlock.sprite.depth + 2);
+                sprite.setDepth(Layers.Roads + 10);
                 sprite.setScale(0.8);
                 this.arrowSprites.push(sprite);
             }

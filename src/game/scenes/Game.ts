@@ -5,6 +5,7 @@ import { Car } from '../Car';
 import { Navigator } from '../Navigator';
 import { Road } from '../Road';
 import { Block } from '../Block';
+import { Layers } from '../../types';
 
 export class Game extends Scene
 {
@@ -47,7 +48,7 @@ export class Game extends Scene
             'grass-iso-ns'
         );
         grassBase.setOrigin(0, 0);
-        grassBase.setDepth(-10);
+        grassBase.setDepth(Layers.Grass);
 
         const grassOffset = this.add.tileSprite(
             worldX - grassTileWidth / 2,
@@ -57,7 +58,7 @@ export class Game extends Scene
             'grass-iso-ns'
         );
         grassOffset.setOrigin(0, 0);
-        grassOffset.setDepth(-9);
+        grassOffset.setDepth(Layers.Grass + 1);
 
         this.camera.setBounds(worldX, worldY, grassLayerWidth, grassLayerHeight);
 
@@ -70,21 +71,21 @@ export class Game extends Scene
             { name: 'northbound2', orientation: 'ns', direction: 'n', startY: -10, endY: 20, x: 24 }
         ]);
 
-        this.createGridSprite('skyscraper', 2, 4, { depth: 20000 });
-        this.createGridSprite('skyscraper', 2, 5, { depth: 20000 });
-        this.createGridSprite('skyscraper', 11, 1, { depth: 20000});
-        this.createGridSprite('skyscraper', 11, 4, {depth: 20000});
-        this.createGridSprite('skyscraper', 13, 4, {depth: 20000});
+        this.createGridSprite('skyscraper', 2, 4, { depth: Layers.Buildings });
+        this.createGridSprite('skyscraper', 2, 5, { depth: Layers.Buildings });
+        this.createGridSprite('skyscraper', 11, 1, { depth: Layers.Buildings });
+        this.createGridSprite('skyscraper', 11, 4, { depth: Layers.Buildings });
+        this.createGridSprite('skyscraper', 13, 4, { depth: Layers.Buildings });
 
-        this.createGridSprite('opening_ne', 4, -11, { depth: 200000 });
-        this.createGridSprite('opening_ne', 5, -11, { depth: 200000 });
-        this.createGridSprite('opening_ne', 23, -11, { depth: 200000 });
+        this.createGridSprite('opening_ne', 4, -11, { depth: Layers.Openings });
+        this.createGridSprite('opening_ne', 5, -11, { depth: Layers.Openings });
+        this.createGridSprite('opening_ne', 23, -11, { depth: Layers.Openings });
 
-        this.createGridSprite('opening_hidden', 5, 19, { depth: 200000 });
-        this.createGridSprite('opening_hidden', 23,19, { depth: 200000 });
+        this.createGridSprite('opening_hidden', 5, 19, { depth: Layers.Openings });
+        this.createGridSprite('opening_hidden', 23, 19, { depth: Layers.Openings });
 
-        this.createGridSprite('opening_nw', -12, 3, { depth: 200000 });
-        this.createGridSprite('opening_nw', -12, 9, { depth: 200000 });
+        this.createGridSprite('opening_nw', -12, 3, { depth: Layers.Openings });
+        this.createGridSprite('opening_nw', -12, 9, { depth: Layers.Openings });
 
 
         const eastbound = this.roadNetwork.getRoadByName('eastbound');
@@ -318,7 +319,7 @@ export class Game extends Scene
         this.camera.zoomTo(2.2, 200, 'Sine.easeInOut');
 
         const boom = this.add.circle(x, y, 12, 0xffa500, 1);
-        boom.setDepth(5000);
+        boom.setDepth(Layers.UI + 10);
 
         let crashPaused = false;
         this.tweens.add({

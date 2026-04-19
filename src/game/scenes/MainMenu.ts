@@ -1,32 +1,38 @@
-import { GameObjects, Scene } from 'phaser';
+import { GameObjects } from 'phaser';
+import { RoadNetwork } from '../RoadNetwork';
+import { Road } from '../Road';
+import { Block } from '../Block';
+import { GameWrapper, Route } from './GameWrapper';
+import { Layers } from '../../types';
 
-import { EventBus } from '../EventBus';
+type MenuButton = {
+    text: GameObjects.Text;
+    bg: GameObjects.Rectangle;
+};
 
-export class MainMenu extends Scene
+export class MainMenu extends GameWrapper
 {
-    background: GameObjects.Image;
-    logo: GameObjects.Image;
-    title: GameObjects.Text;
-    logoTween: Phaser.Tweens.Tween | null;
+    private titleText: GameObjects.Text;
+    private subtitleText: GameObjects.Text | null = null;
+    private creditsText: GameObjects.Text | null = null;
+    private creditsOpen = false;
+    private playButton: MenuButton | null = null;
+    private creditsButton: MenuButton | null = null;
+    private backButton: MenuButton | null = null;
+    private logoTween: Phaser.Tweens.Tween | null = null;
+    private menuZoom = 1.2;
 
     constructor ()
     {
         super('MainMenu');
+        this.crashDistance = 0;
     }
 
     create ()
     {
-        this.background = this.add.image(512, 384, 'background');
-
-        this.logo = this.add.image(512, 300, 'logo').setDepth(100);
-
-        this.title = this.add.text(512, 460, 'Main Menu', {
-            fontFamily: 'Arial Black', fontSize: 38, color: '#ffffff',
-            stroke: '#000000', strokeThickness: 8,
-            align: 'center'
-        }).setOrigin(0.5).setDepth(100);
-
-        EventBus.emit('current-scene-ready', this);
+        super.create();
+        this.input.off('wheel');
+        this.createMenuUi();
     }
     
     changeScene ()
@@ -37,7 +43,7 @@ export class MainMenu extends Scene
             this.logoTween = null;
         }
 
-        this.scene.start('Game');
+        this.scene.start('Level1');
     }
 
     moveLogo (vueCallback: ({ x, y }: { x: number, y: number }) => void)
@@ -56,21 +62,248 @@ export class MainMenu extends Scene
         else
         {
             this.logoTween = this.tweens.add({
-                targets: this.logo,
-                x: { value: 750, duration: 3000, ease: 'Back.easeInOut' },
-                y: { value: 80, duration: 1500, ease: 'Sine.easeOut' },
+                targets: this.titleText,
+                x: { value: 540, duration: 3000, ease: 'Back.easeInOut' },
+                y: { value: 130, duration: 1500, ease: 'Sine.easeOut' },
                 yoyo: true,
                 repeat: -1,
                 onUpdate: () => {
                     if (vueCallback)
                     {
                         vueCallback({
-                            x: Math.floor(this.logo.x),
-                            y: Math.floor(this.logo.y)
+                            x: Math.floor(this.titleText.x),
+                            y: Math.floor(this.titleText.y)
                         });
                     }
                 }
             });
         }
+    }
+
+    protected buildRoadNetwork(): RoadNetwork {
+        const roadNetwork = new RoadNetwork(this, 400, 120);
+        roadNetwork.build([
+            { name: 'westbound1', orientation: 'ew', direction: 'w', startX: -6, endX: 60, y: 1 },
+            { name: 'westbound2', orientation: 'ew', direction: 'w', startX: -6, endX: 60, y: 2 },
+            { name: 'westbound3', orientation: 'ew', direction: 'w', startX: -6, endX: 60, y: 3 },
+            { name: 'eastbound1', orientation: 'ew', direction: 'e', startX: -6, endX: 60, y: 5 },
+            { name: 'eastbound2', orientation: 'ew', direction: 'e', startX: -6, endX: 60, y: 6 },
+            { name: 'eastbound3', orientation: 'ew', direction: 'e', startX: -6, endX: 60, y: 7 }
+        ]);
+
+        return roadNetwork;
+    }
+
+    protected setupLevel(): void {
+        const routes: Route[] = [];
+        const westboundNames = ['westbound1', 'westbound2', 'westbound3'];
+        const eastboundNames = ['eastbound1', 'eastbound2', 'eastbound3'];
+
+        for (const name of westboundNames) {
+            const road = this.roadNetwork.getRoadByName(name);
+            this.pushRoute(routes, road, road?.getBase(), [road?.getEnd()]);
+        }
+
+        for (const name of eastboundNames) {
+            const road = this.roadNetwork.getRoadByName(name);
+            this.pushRoute(routes, road, road?.getBase(), [road?.getEnd()]);
+        }
+
+        this.startDynamicSpawning(routes);
+        this.menuZoom = 1;
+        this.camera.setZoom(this.menuZoom);
+
+        const openingX = -7;
+        const openingRows = [1, 2, 3, 5, 6, 7];
+        for (const row of openingRows) {
+            this.createGridSprite('opening_nw', openingX, row - 1, { depth: Layers.Openings });
+        }
+    }
+
+    private createMenuUi(): void {
+        const titleStyle = {
+            fontFamily: 'Georgia',
+            fontSize: '64px',
+            color: '#f5f5f5',
+            stroke: '#1b1b1b',
+            strokeThickness: 6
+        };
+
+        const subtitleStyle = {
+            fontFamily: 'Georgia',
+            fontSize: '18px',
+            color: '#d9d9d9'
+        };
+
+        this.titleText = this.add.text(257, 150, 'Signal Hill\nTurnpike', titleStyle).setOrigin(0.5).setScrollFactor(0).setDepth(Layers.UI + 2);
+        this.subtitleText = this.add.text(170, 250, 'Ludum Dare 59', subtitleStyle).setOrigin(0.5).setScrollFactor(0).setDepth(Layers.UI + 2);
+
+        const buttonRowY = 560;
+        this.playButton = this.createMenuButton('Play', buttonRowY, () => this.changeScene(), 420);
+        this.creditsButton = this.createMenuButton('Credits', buttonRowY, () => this.toggleCredits(), 620);
+        this.backButton = this.createMenuButton('Back', buttonRowY, () => this.hideCredits(), 520);
+        this.setMenuButtonVisible(this.backButton, false);
+    }
+
+    private startDynamicSpawning(routes: Route[]): void {
+        for (const route of routes) {
+            const minDelay = Phaser.Math.Between(300, 900);
+            const maxDelay = Phaser.Math.Between(1400, 3200);
+            this.scheduleRouteSpawn(route, minDelay, maxDelay);
+        }
+    }
+
+    private scheduleRouteSpawn(route: Route, minDelay: number, maxDelay: number): void {
+        if (!route.destinations.length) {
+            return;
+        }
+
+        const spawnOnce = () => {
+            if (!route.destinations.length) {
+                return;
+            }
+
+            const destination = Phaser.Utils.Array.GetRandom(route.destinations);
+            const speed = Phaser.Math.Between(35, 75);
+            this.spawnCar(route.road, speed, route.source, destination);
+
+            const drift = Phaser.Math.Between(-200, 300);
+            const nextMin = Math.max(200, minDelay + drift);
+            const nextMax = Math.max(nextMin + 200, maxDelay + (drift * 2));
+            const nextDelay = Phaser.Math.Between(nextMin, nextMax);
+            this.time.delayedCall(nextDelay, spawnOnce);
+        };
+
+        spawnOnce();
+    }
+
+    private createMenuButton(label: string, y: number, onClick: () => void, x: number = 512): MenuButton {
+        const button = this.add.text(x, y, label, {
+            fontFamily: 'Georgia',
+            fontSize: '26px',
+            color: '#ffffff'
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(Layers.UI + 2);
+
+        const paddingX = 40;
+        const paddingY = 14;
+        const bounds = button.getBounds();
+        const bg = this.add.rectangle(
+            bounds.centerX,
+            bounds.centerY,
+            bounds.width + paddingX,
+            bounds.height + paddingY,
+            0x1b1b1b,
+            0.65
+        );
+        bg.setStrokeStyle(2, 0xffffff, 0.7);
+        bg.setOrigin(0.5);
+        bg.setScrollFactor(0);
+        bg.setDepth(Layers.UI + 1);
+
+        const setHover = (active: boolean) => {
+            bg.setFillStyle(0x2a2a2a, active ? 0.9 : 0.65);
+            button.setColor(active ? '#ffd36a' : '#ffffff');
+        };
+
+        bg.setInteractive({ useHandCursor: true })
+            .on('pointerover', () => setHover(true))
+            .on('pointerout', () => setHover(false))
+            .on('pointerdown', onClick);
+
+        button.setInteractive({ useHandCursor: true })
+            .on('pointerover', () => setHover(true))
+            .on('pointerout', () => setHover(false))
+            .on('pointerdown', onClick);
+
+        return { text: button, bg };
+    }
+
+    private toggleCredits(): void {
+        if (this.creditsOpen) {
+            this.hideCredits();
+            return;
+        }
+
+        this.showCredits();
+    }
+
+    private showCredits(): void {
+        this.setTitleVisible(false);
+        if (!this.creditsText) {
+            const anchor = this.roadNetwork.getWorldFromGrid(16, 25);
+            this.creditsText = this.add.text(
+                anchor.x,
+                anchor.y,
+                'Made by Benjamin Man in 72 hours for Ludum Dare 59.\n\nReference graphics credits 123RF, Alamy, Freepik\n\nBuilt with Phaser 3',
+                {
+                    fontFamily: 'Georgia',
+                    fontSize: '25px',
+                    color: '#f2f2f2',
+                    align: 'center'
+                }
+            ).setOrigin(0.5).setDepth(Layers.UI + 4);
+        }
+
+        this.creditsText.setVisible(true);
+        this.creditsOpen = true;
+        this.camera.pan(this.creditsText.x, this.creditsText.y, 500, 'Sine.easeInOut');
+
+        this.setMenuButtonVisible(this.playButton, false);
+        this.setMenuButtonVisible(this.creditsButton, false);
+        this.setMenuButtonVisible(this.backButton, true);
+    }
+
+    private hideCredits(): void {
+        this.setTitleVisible(true);
+        if (this.creditsText) {
+            this.creditsText.setVisible(false);
+        }
+
+        this.creditsOpen = false;
+        this.camera.pan(400, 120, 400, 'Sine.easeInOut');
+
+        this.setMenuButtonVisible(this.playButton, true);
+        this.setMenuButtonVisible(this.creditsButton, true);
+        this.setMenuButtonVisible(this.backButton, false);
+    }
+
+    private setMenuButtonVisible(button: MenuButton | null, visible: boolean): void {
+        if (!button) {
+            return;
+        }
+
+        button.text.setVisible(visible);
+        button.bg.setVisible(visible);
+        button.text.setActive(visible);
+        button.bg.setActive(visible);
+    }
+
+    private setTitleVisible(visible: boolean): void {
+        this.titleText.setVisible(visible);
+        if (this.subtitleText) {
+            this.subtitleText.setVisible(visible);
+        }
+    }
+
+    private pushRoute(
+        routes: Route[],
+        road: Road | undefined,
+        source: Block | undefined,
+        destinations: Array<Block | undefined>
+    ): void {
+        if (!road || !source) {
+            return;
+        }
+
+        const validDestinations = destinations.filter((dest): dest is Block => !!dest);
+        if (!validDestinations.length) {
+            return;
+        }
+
+        routes.push({
+            road,
+            source,
+            destinations: validDestinations
+        });
     }
 }

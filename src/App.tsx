@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { IRefPhaserGame, PhaserGame } from './PhaserGame';
 import { MainMenu } from './game/scenes/MainMenu';
-import { Game as GameScene } from './game/scenes/Game';
 
 function App()
 {
@@ -26,13 +25,10 @@ function App()
 
                 setMousePosition({ x, y });
 
-                if (scene.scene.key === 'Game') {
-                    const gameScene = scene as GameScene;
-                    const roadNetwork = gameScene.roadNetwork;
-                    if (roadNetwork) {
-                        const grid = roadNetwork.getGridFromIso(pointer.worldX ?? pointer.x, pointer.worldY ?? pointer.y);
-                        setGridPosition({ x: grid.gridX, y: grid.gridY });
-                    }
+                const roadNetwork = (scene as { roadNetwork?: { getGridFromIso?: (x: number, y: number) => { gridX: number; gridY: number } } }).roadNetwork;
+                if (roadNetwork?.getGridFromIso) {
+                    const grid = roadNetwork.getGridFromIso(pointer.worldX ?? pointer.x, pointer.worldY ?? pointer.y);
+                    setGridPosition({ x: grid.gridX, y: grid.gridY });
                 }
             }
 

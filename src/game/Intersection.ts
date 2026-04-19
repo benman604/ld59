@@ -2,7 +2,7 @@ import { Block } from './Block';
 import { TrafficLight, TrafficLightState } from './TrafficLight';
 import { RoadNetwork } from './RoadNetwork';
 import { Road } from './Road';
-import { Dir, rgb } from '../types';
+import { Dir, Layers, rgb } from '../types';
 
 export class Intersection extends Block {
     private nsRoads: Road[] = [];
@@ -160,10 +160,10 @@ export class Intersection extends Block {
             line.moveTo(pos.x, pos.y);
             line.lineTo(pos.edgeX, pos.edgeY);
             line.strokePath();
-            line.setDepth(this.sprite.depth + 1);
+            line.setDepth(Layers.TrafficLights - 1);
             this.trafficLightLines.push(line);
 
-            light.render(this.scene, pos.x, pos.y, this.sprite.depth + 5000, 2);
+            light.render(this.scene, pos.x, pos.y, Layers.TrafficLights, 2);
         });
     }
 }

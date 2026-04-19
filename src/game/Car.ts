@@ -2,7 +2,7 @@ import { Road } from './Road';
 import { RoadNetwork } from './RoadNetwork';
 import { Block } from './Block';
 import { Intersection } from './Intersection';
-import { Dir } from '../types';
+import { Dir, Layers } from '../types';
 
 export type CarDirection = 'sw' | 'se' | 'ne' | 'nw';
 
@@ -27,7 +27,7 @@ export class Car {
 
         const start = this.path[0] ?? { x: 0, y: 0 };
         this.sprite = scene.add.image(start.x, start.y, 'car-se');
-        this.sprite.setDepth(1000);
+        this.sprite.setDepth(Layers.Cars);
     }
 
     setRoute(blocks: Block[], loop: boolean = false): void {

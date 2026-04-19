@@ -1,4 +1,5 @@
 import type { RoadNetwork } from './RoadNetwork';
+import { Layers } from '../types';
 export type BlockNeighborDirection = 'north' | 'south' | 'east' | 'west';
 
 export class Block {
@@ -35,6 +36,7 @@ export class Block {
         this.sprite = scene.add.image(worldX, worldY, textureKey);
         this.sprite.setDisplaySize(displayWidth, displayHeight);
         this.sprite.setRotation(rotationRadians);
+        this.sprite.setDepth(Layers.Roads);
 
         if (typeof tint === 'number') {
             this.sprite.setTint(tint);
