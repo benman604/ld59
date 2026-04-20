@@ -12,14 +12,21 @@ export function RoadInspector({ summary, onDelete }: RoadInspectorProps) {
 
     return (
         <div className="spritePosition">
-            <pre>{
-                `Road: ${summary.name}\n` +
-                `${summary.length} blocks\n` +
-                `${summary.intersections} intersections\n` +
-                `$${summary.blockCost} x ${summary.length} + $${summary.intersectionCost} x ${summary.intersections} = $${summary.cost}`
-            }</pre>
+            <div>Build {summary.name}</div>
+            <div>{summary.length} blocks</div>
+            <div>{summary.intersections} intersections</div>
             <div>
-                <button className="button" onClick={() => onDelete(summary.name)}>Delete</button>
+                ${summary.blockCost} x {summary.length} + ${summary.intersectionCost} x {summary.intersections} = ${summary.cost}
+            </div>
+            <div>
+                <button
+                    className="button button--text"
+                    onClick={() => onDelete(summary.name)}
+                    aria-label="Delete road"
+                    title="Delete road"
+                >
+                    Delete
+                </button>
             </div>
         </div>
     );

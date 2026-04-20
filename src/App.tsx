@@ -82,7 +82,7 @@ function App()
     // Event emitted from the PhaserGame component
     const currentScene = (scene: Phaser.Scene) => {
 
-        const builderActive = scene.scene.key === 'LevelBuilder';
+        const builderActive = scene.scene.key.startsWith('LevelBuilder');
         setIsBuilderScene(builderActive);
         if (!builderActive) {
             setBuildMode(false);
@@ -121,22 +121,26 @@ function App()
 
     return (
         <div id="app">
-            <PhaserGame ref={phaserRef} currentActiveScene={currentScene} />
-            <div>
-                <PositionPanel
-                    mousePosition={mousePosition}
-                    gridPosition={gridPosition}
-                />
-                <BuildPanel
-                    isBuilderScene={isBuilderScene}
-                    buildMode={buildMode}
-                    buildSummary={buildSummary}
-                    onToggleBuildMode={toggleBuildMode}
-                    onConfirmBuild={confirmBuild}
-                    onCancelBuild={cancelBuild}
-                />
-                <RoadInspector summary={roadSummary} onDelete={deleteRoad} />
+            <div className="game-shell">
+                <PhaserGame ref={phaserRef} currentActiveScene={currentScene} />
+                {isBuilderScene && (
+                    <div className="ui-overlay">
+                        <BuildPanel
+                            isBuilderScene={isBuilderScene}
+                            buildMode={buildMode}
+                            buildSummary={buildSummary}
+                            onToggleBuildMode={toggleBuildMode}
+                            onConfirmBuild={confirmBuild}
+                            onCancelBuild={cancelBuild}
+                        />
+                        <RoadInspector summary={roadSummary} onDelete={deleteRoad} />
+                    </div>
+                )}
             </div>
+            <PositionPanel
+                mousePosition={mousePosition}
+                gridPosition={gridPosition}
+            />
         </div>
     )
 }

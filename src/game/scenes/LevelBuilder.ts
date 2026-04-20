@@ -2,18 +2,25 @@ import { RoadNetwork } from '../RoadNetwork';
 import { GameWrapper } from './GameWrapper';
 import { EventBus } from '../EventBus';
 import { Layers } from '../../types';
-import { RoadSpec } from '../Road';
+import { EWRoadSpec, NSRoadSpec, RoadSpec } from '../Road';
 import { Intersection } from '../Intersection';
+import { Route } from '../Route';
 
 const COST_PER_BLOCK = 25;
 const COST_PER_INTERSECTION = 100;
 
-type GridPoint = {
+export type GridPoint = {
     gridX: number;
     gridY: number;
 };
 
+export type RoutePairSpec = {
+    source: GridPoint;
+    destination: GridPoint;
+};
+
 type BuildSummary = {
+    name: string;
     length: number;
     intersections: number;
     cost: number;
@@ -37,7 +44,9 @@ export class LevelBuilder extends GameWrapper
     private previewArrows: Phaser.GameObjects.Image[] = [];
     private idleIndicator: Phaser.GameObjects.Image | null = null;
     private pendingSpec: RoadSpec | null = null;
-    private roadSpecs: RoadSpec[] = [];
+    private baseRoadSpecs: RoadSpec[] = [];
+    private playerRoadSpecs: RoadSpec[] = [];
+    private routePairs: RoutePairSpec[] = [];
     private modeHint: Phaser.GameObjects.Text | null = null;
     private clickStart: { x: number; y: number } | null = null;
     private selectedRoad: RoadInstance | null = null;
@@ -45,10 +54,17 @@ export class LevelBuilder extends GameWrapper
 
     private static readonly SELECTION_TEXTURE_KEY = 'road-selection-iso';
 
-    constructor ()
+    constructor (key: string = 'LevelBuilder')
     {
-        super('LevelBuilder');
+        super(key);
         this.crashDistance = 0;
+    }
+
+    init(): void {
+        super.init();
+        this.baseRoadSpecs = this.getInitialRoadSpecs();
+        this.playerRoadSpecs = [];
+        this.routePairs = this.getRoutePairs();
     }
 
     create ()
@@ -60,17 +76,26 @@ export class LevelBuilder extends GameWrapper
 
     protected buildRoadNetwork(): RoadNetwork {
         const roadNetwork = new RoadNetwork(this, 400, 120);
-        roadNetwork.build(this.roadSpecs);
+        roadNetwork.build(this.getAllRoadSpecs());
         return roadNetwork;
     }
 
     protected setupLevel(): void {
+        this.buildRoutes();
         // const hint = this.add.text(24, 24, 'Build Mode: off', {
         //     fontFamily: 'Georgia',
         //     fontSize: '18px',
         //     color: '#ffffff'
         // }).setScrollFactor(0).setDepth(Layers.UI + 2);
         // this.modeHint = hint;
+    }
+
+    protected getInitialRoadSpecs(): RoadSpec[] {
+        return [];
+    }
+
+    protected getRoutePairs(): RoutePairSpec[] {
+        return [];
     }
 
     private bindBuilderEvents(): void {
@@ -88,9 +113,9 @@ export class LevelBuilder extends GameWrapper
                 return;
             }
 
-            this.roadSpecs.push(this.pendingSpec);
+            this.mergeRoadSpec(this.pendingSpec);
             this.pendingSpec = null;
-            this.roadNetwork.build(this.roadSpecs);
+            this.roadNetwork.build(this.getAllRoadSpecs());
             this.clearPreview();
             this.resetBuildState();
             EventBus.emit('builder:clear');
@@ -102,8 +127,14 @@ export class LevelBuilder extends GameWrapper
         };
 
         const handleDelete = (payload: { name: string }) => {
-            this.roadSpecs = this.roadSpecs.filter((spec) => spec.name !== payload.name);
-            this.roadNetwork.build(this.roadSpecs);
+            if (this.isBaseRoad(payload.name)) {
+                this.clearSelectedRoad();
+                EventBus.emit('road:clear');
+                return;
+            }
+
+            this.playerRoadSpecs = this.playerRoadSpecs.filter((spec) => spec.name !== payload.name);
+            this.roadNetwork.build(this.getAllRoadSpecs());
             this.clearSelectedRoad();
             EventBus.emit('road:clear');
         };
@@ -289,7 +320,9 @@ export class LevelBuilder extends GameWrapper
 
         const intersections = this.countNewIntersections(path.cells, path.orientation);
         const cost = (COST_PER_BLOCK * length) + (COST_PER_INTERSECTION * intersections);
+        const pendingSpec = this.createRoadSpec(this.roadStart, this.previewEnd);
         const summary: BuildSummary = {
+            name: pendingSpec.name,
             length,
             intersections,
             cost,
@@ -302,7 +335,7 @@ export class LevelBuilder extends GameWrapper
             return;
         }
 
-        this.pendingSpec = this.createRoadSpec(this.roadStart, this.previewEnd);
+        this.pendingSpec = pendingSpec;
         this.buildState = 'confirm';
         EventBus.emit('builder:proposal', summary);
     }
@@ -346,9 +379,12 @@ export class LevelBuilder extends GameWrapper
         EventBus.emit('road:inspect', summary);
     }
 
-    private findRoadAt(grid: GridPoint): RoadInstance | null {
+    private findRoadAt(grid: GridPoint, allowBase: boolean = false): RoadInstance | null {
         for (const road of this.roadNetwork.getRoads()) {
             if (road.getBlockAt(grid.gridX, grid.gridY)) {
+                if (!allowBase && this.isBaseRoad(road.name)) {
+                    return null;
+                }
                 return road;
             }
         }
@@ -473,7 +509,7 @@ export class LevelBuilder extends GameWrapper
     }
 
     private countDirectionRoads(directionLabel: string): number {
-        return this.roadSpecs.filter((spec) => this.getDirectionLabelFromSpec(spec) === directionLabel).length;
+        return this.getAllRoadSpecs().filter((spec) => this.getDirectionLabelFromSpec(spec) === directionLabel).length;
     }
 
     private getDirectionLabel(start: GridPoint, end: GridPoint): string {
@@ -490,6 +526,136 @@ export class LevelBuilder extends GameWrapper
         }
 
         return spec.direction === 's' ? 'Southbound' : 'Northbound';
+    }
+
+    private mergeRoadSpec(newSpec: RoadSpec): void {
+        const matches = this.getAllRoadSpecs().filter((spec) => this.canMergeRoadSpecs(spec, newSpec));
+        if (!matches.length) {
+            this.playerRoadSpecs.push(newSpec);
+            return;
+        }
+
+        const baseMatches = this.baseRoadSpecs.filter((spec) => matches.includes(spec));
+        const playerMatches = this.playerRoadSpecs.filter((spec) => matches.includes(spec));
+        const primary = baseMatches[0] ?? playerMatches[0] ?? newSpec;
+        const merged = this.buildMergedSpec(primary, newSpec, matches);
+
+        this.baseRoadSpecs = this.baseRoadSpecs.filter((spec) => !baseMatches.includes(spec));
+        this.playerRoadSpecs = this.playerRoadSpecs.filter((spec) => !playerMatches.includes(spec));
+
+        if (baseMatches.length > 0) {
+            this.baseRoadSpecs.push(merged);
+        } else {
+            this.playerRoadSpecs.push(merged);
+        }
+    }
+
+    private canMergeRoadSpecs(existing: RoadSpec, incoming: RoadSpec): boolean {
+        if (existing.orientation !== incoming.orientation) {
+            return false;
+        }
+
+        if (existing.direction !== incoming.direction) {
+            return false;
+        }
+
+        if (existing.orientation === 'ew') {
+            const existingEW = existing as EWRoadSpec;
+            const incomingEW = incoming as EWRoadSpec;
+            if (existingEW.y !== incomingEW.y) {
+                return false;
+            }
+
+            const rangeA = this.getRoadSpecRange(existing);
+            const rangeB = this.getRoadSpecRange(incoming);
+            return rangeA.min <= rangeB.max + 1 && rangeA.max >= rangeB.min - 1;
+        }
+
+        const existingNS = existing as NSRoadSpec;
+        const incomingNS = incoming as NSRoadSpec;
+        if (existingNS.x !== incomingNS.x) {
+            return false;
+        }
+
+        const rangeA = this.getRoadSpecRange(existing);
+        const rangeB = this.getRoadSpecRange(incoming);
+        return rangeA.min <= rangeB.max + 1 && rangeA.max >= rangeB.min - 1;
+    }
+
+    private buildMergedSpec(primary: RoadSpec, incoming: RoadSpec, matches: RoadSpec[]): RoadSpec {
+        const allSpecs = [...matches, incoming];
+        const ranges = allSpecs.map((spec) => this.getRoadSpecRange(spec));
+        const min = Math.min(...ranges.map((range) => range.min));
+        const max = Math.max(...ranges.map((range) => range.max));
+
+        if (primary.orientation === 'ew') {
+            const primaryEW = primary as EWRoadSpec;
+            const startX = primary.direction === 'e' ? min : max;
+            const endX = primary.direction === 'e' ? max : min;
+            return {
+                name: primary.name,
+                orientation: 'ew',
+                direction: primary.direction,
+                startX,
+                endX,
+                y: primaryEW.y
+            };
+        }
+
+        const primaryNS = primary as NSRoadSpec;
+        const startY = primary.direction === 's' ? min : max;
+        const endY = primary.direction === 's' ? max : min;
+        return {
+            name: primary.name,
+            orientation: 'ns',
+            direction: primary.direction,
+            startY,
+            endY,
+            x: primaryNS.x
+        };
+    }
+
+    private getRoadSpecRange(spec: RoadSpec): { min: number; max: number } {
+        if (spec.orientation === 'ew') {
+            return {
+                min: Math.min(spec.startX, spec.endX),
+                max: Math.max(spec.startX, spec.endX)
+            };
+        }
+
+        return {
+            min: Math.min(spec.startY, spec.endY),
+            max: Math.max(spec.startY, spec.endY)
+        };
+    }
+
+    private getAllRoadSpecs(): RoadSpec[] {
+        return [...this.baseRoadSpecs, ...this.playerRoadSpecs];
+    }
+
+    private isBaseRoad(name: string): boolean {
+        return this.baseRoadSpecs.some((spec) => spec.name === name);
+    }
+
+    private buildRoutes(): Route[] {
+        const routes: Route[] = [];
+
+        for (const pair of this.routePairs) {
+            const source = this.roadNetwork.getBlockAt(pair.source.gridX, pair.source.gridY);
+            const destination = this.roadNetwork.getBlockAt(pair.destination.gridX, pair.destination.gridY);
+            if (!source || !destination) {
+                continue;
+            }
+
+            const sourceRoad = this.findRoadAt(pair.source, true);
+            if (!sourceRoad) {
+                continue;
+            }
+
+            routes.push(new Route(this, this.roadNetwork, sourceRoad, source, destination));
+        }
+
+        return routes;
     }
 
     private getPathCells(start: GridPoint, end: GridPoint): { cells: GridPoint[]; orientation: 'ew' | 'ns' } {

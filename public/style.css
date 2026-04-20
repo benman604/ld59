@@ -1,9 +1,17 @@
+@font-face {
+    font-family: 'Pixeled';
+    src: url('/assets/fonts/Pixeled.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
 body {
     margin: 0;
     padding: 0;
     color: rgba(255, 255, 255, 0.87);
     background-color: #000000; 
-    font-family: Arial, Helvetica, sans-serif;
+    font-family: 'Pixeled', Arial, Helvetica, sans-serif;
 }
 
 #app {
@@ -13,6 +21,23 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
+    gap: 16px;
+}
+
+.game-shell {
+    position: relative;
+    display: inline-block;
+}
+
+.ui-overlay {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-end;
+    z-index: 10;
 }
 
 .spritePosition {
@@ -21,22 +46,29 @@ body {
 }
 
 .button {
-    width: 140px;
-    margin: 10px;
-    padding: 10px;
-    background-color: #000000;
-    color: rgba(255, 255, 255, 0.87);
-    border: 1px solid rgba(255, 255, 255, 0.87);
+    width: 44px;
+    height: 44px;
+    margin: 6px;
+    padding: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    color: rgba(255, 255, 255, 0.9);
+    border: 2px solid #000000;
+    font-family: 'Pixeled', Arial, Helvetica, sans-serif;
     cursor: pointer;
-    transition: all 0.3s;
+    transition: background-color 0.2s ease, color 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    line-height: 1;
 
     &:hover {
-        border: 1px solid #0ec3c9;
-        color: #0ec3c9;
+        background-color: rgba(0, 0, 0, 0.7);
+        color: rgba(255, 255, 255, 1);
     }
 
     &:active {
-        background-color: #0ec3c9;
+        background-color: rgba(0, 0, 0, 0.9);
     }
 
     /* Disabled styles */
@@ -45,4 +77,12 @@ body {
         border: 1px solid rgba(255, 255, 255, 0.3);
         color: rgba(255, 255, 255, 0.3);
     }
+}
+
+.button--text {
+    width: auto;
+    min-width: 88px;
+    padding: 6px 12px;
+    font-size: 14px;
+    line-height: 1.2;
 }

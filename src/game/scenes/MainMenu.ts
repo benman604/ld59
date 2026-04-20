@@ -13,14 +13,11 @@ type MenuButton = {
 
 export class MainMenu extends GameWrapper
 {
-    private titleText: GameObjects.Text;
-    private subtitleText: GameObjects.Text | null = null;
     private creditsText: GameObjects.Text | null = null;
     private creditsOpen = false;
     private playButton: MenuButton | null = null;
     private creditsButton: MenuButton | null = null;
     private backButton: MenuButton | null = null;
-    private logoTween: Phaser.Tweens.Tween | null = null;
     private menuZoom = 1.2;
 
     constructor ()
@@ -38,47 +35,7 @@ export class MainMenu extends GameWrapper
     
     changeScene ()
     {
-        if (this.logoTween)
-        {
-            this.logoTween.stop();
-            this.logoTween = null;
-        }
-
-        this.scene.start('LevelBuilder');
-    }
-
-    moveLogo (vueCallback: ({ x, y }: { x: number, y: number }) => void)
-    {
-        if (this.logoTween)
-        {
-            if (this.logoTween.isPlaying())
-            {
-                this.logoTween.pause();
-            }
-            else
-            {
-                this.logoTween.play();
-            }
-        } 
-        else
-        {
-            this.logoTween = this.tweens.add({
-                targets: this.titleText,
-                x: { value: 540, duration: 3000, ease: 'Back.easeInOut' },
-                y: { value: 130, duration: 1500, ease: 'Sine.easeOut' },
-                yoyo: true,
-                repeat: -1,
-                onUpdate: () => {
-                    if (vueCallback)
-                    {
-                        vueCallback({
-                            x: Math.floor(this.titleText.x),
-                            y: Math.floor(this.titleText.y)
-                        });
-                    }
-                }
-            });
-        }
+        this.scene.start('LevelBuilder1');
     }
 
     protected buildRoadNetwork(): RoadNetwork {
@@ -117,22 +74,11 @@ export class MainMenu extends GameWrapper
     }
 
     private createMenuUi(): void {
-        const titleStyle = {
-            fontFamily: 'Georgia',
-            fontSize: '64px',
-            color: '#f5f5f5',
-            stroke: '#1b1b1b',
-            strokeThickness: 6
-        };
-
-        const subtitleStyle = {
-            fontFamily: 'Georgia',
-            fontSize: '18px',
-            color: '#d9d9d9'
-        };
-
-        this.titleText = this.add.text(257, 150, 'Signal Hill\nTurnpike', titleStyle).setOrigin(0.5).setScrollFactor(0).setDepth(Layers.UI + 2);
-        this.subtitleText = this.add.text(170, 250, 'Ludum Dare 59', subtitleStyle).setOrigin(0.5).setScrollFactor(0).setDepth(Layers.UI + 2);
+        const titleAnchor = this.roadNetwork.getWorldFromGrid(0, -2);
+        this.add.image(titleAnchor.x, titleAnchor.y - 30, 'game_title_iso_ns')
+            .setOrigin(0.5)
+            .setScale(2)
+            .setDepth(Layers.Buildings + 5);
 
         const buttonRowY = 560;
         this.playButton = this.createMenuButton('Play', buttonRowY, () => this.changeScene(), 420);
@@ -166,7 +112,7 @@ export class MainMenu extends GameWrapper
 
     private createMenuButton(label: string, y: number, onClick: () => void, x: number = 512): MenuButton {
         const button = this.add.text(x, y, label, {
-            fontFamily: 'Georgia',
+            fontFamily: 'Pixeled',
             fontSize: '26px',
             color: '#ffffff'
         }).setOrigin(0.5).setScrollFactor(0).setDepth(Layers.UI + 2);
@@ -215,16 +161,15 @@ export class MainMenu extends GameWrapper
     }
 
     private showCredits(): void {
-        this.setTitleVisible(false);
         if (!this.creditsText) {
             const anchor = this.roadNetwork.getWorldFromGrid(16, 25);
             this.creditsText = this.add.text(
                 anchor.x,
                 anchor.y,
-                'Made by Benjamin Man in 72 hours for Ludum Dare 59.\n\nReference graphics credits 123RF, Alamy, Freepik\n\nBuilt with Phaser 3',
+                'Made by Benjamin Man in 72 hours for Ludum Dare 59.\n\nReference graphics credits 123RF, Alamy, Freepik\nFont from DaFont\n\nBuilt with Phaser 3',
                 {
-                    fontFamily: 'Georgia',
-                    fontSize: '25px',
+                    fontFamily: 'Pixeled',
+                    fontSize: '15px',
                     color: '#f2f2f2',
                     align: 'center'
                 }
@@ -241,7 +186,6 @@ export class MainMenu extends GameWrapper
     }
 
     private hideCredits(): void {
-        this.setTitleVisible(true);
         if (this.creditsText) {
             this.creditsText.setVisible(false);
         }
@@ -263,13 +207,6 @@ export class MainMenu extends GameWrapper
         button.bg.setVisible(visible);
         button.text.setActive(visible);
         button.bg.setActive(visible);
-    }
-
-    private setTitleVisible(visible: boolean): void {
-        this.titleText.setVisible(visible);
-        if (this.subtitleText) {
-            this.subtitleText.setVisible(visible);
-        }
     }
 
     private pushRoute(

@@ -1,4 +1,5 @@
 export type BuildSummary = {
+    name: string;
     length: number;
     intersections: number;
     cost: number;

@@ -3,7 +3,7 @@ import { GameOver } from './scenes/GameOver';
 import { TestGame } from './scenes/TestGame';
 import { Level1 } from './scenes/Level1';
 import { Level2 } from './scenes/Level2';
-import { LevelBuilder } from './scenes/LevelBuilder';
+import { LevelBuilder1 } from './scenes/Levels/LevelBuilder1';
 import { MainMenu } from './scenes/MainMenu';
 import { AUTO, Game } from 'phaser';
 import { Preloader } from './scenes/Preloader';
@@ -23,7 +23,7 @@ const config: Phaser.Types.Core.GameConfig = {
         MainMenu,
         Level1,
         Level2,
-        LevelBuilder,
+        LevelBuilder1,
         TestGame,
         GameOver
     ]
