@@ -20,6 +20,10 @@ export class Level2 extends GameWrapper
         super('Level2');
     }
 
+    protected isBuilderEnabled(): boolean {
+        return true;
+    }
+
     protected buildRoadNetwork(): RoadNetwork {
         const roadNetwork = new RoadNetwork(this, 400, 120);
         roadNetwork.build([

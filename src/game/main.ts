@@ -4,6 +4,7 @@ import { TestGame } from './scenes/old/TestGame';
 import { Level1 } from './scenes/old/Level1';
 import { Level2 } from './scenes/old/Level2';
 import { LevelBuilder1 } from './scenes/Levels/LevelBuilder1';
+import { LevelBuilder2 } from './scenes/Levels/LevelBuilder2';
 import { MainMenu } from './scenes/MainMenu';
 import { AUTO, Game } from 'phaser';
 import { Preloader } from './scenes/Preloader';
@@ -24,6 +25,7 @@ const config: Phaser.Types.Core.GameConfig = {
         Level1,
         Level2,
         LevelBuilder1,
+        LevelBuilder2,
         TestGame,
         GameOver
     ]
