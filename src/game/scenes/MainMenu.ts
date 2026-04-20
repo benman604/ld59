@@ -35,7 +35,7 @@ export class MainMenu extends GameWrapper
     
     changeScene ()
     {
-        this.scene.start('LevelBuilder2');
+        this.scene.start('LevelBuilder4');
     }
 
     protected buildRoadNetwork(): RoadNetwork {

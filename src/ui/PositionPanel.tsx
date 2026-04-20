@@ -15,7 +15,7 @@ export function PositionPanel({ mousePosition, gridPosition }: PositionPanelProp
                 <pre>{`{\n  x: ${mousePosition.x}\n  y: ${mousePosition.y}\n}`}</pre>
             </div>
             <div className="spritePosition">Grid Segment:
-                <pre>{`{\n  x: ${gridPosition.x}\n  y: ${gridPosition.y - 1}\n}`}</pre>
+                <pre>{`{\n  x: ${gridPosition.x}\n  y: ${gridPosition.y}\n}`}</pre>
             </div>
         </div>
     );

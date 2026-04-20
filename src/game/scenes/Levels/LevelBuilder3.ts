@@ -12,11 +12,11 @@ type RouteLabelPlan = {
     target?: number;
 };
 
-export class LevelBuilder2 extends GameWrapper
+export class LevelBuilder3 extends GameWrapper
 {
     constructor ()
     {
-        super('LevelBuilder2');
+        super('LevelBuilder3');
     }
 
     protected isBuilderEnabled(): boolean {
@@ -43,12 +43,12 @@ export class LevelBuilder2 extends GameWrapper
 
     protected getInitialRoadSpecs(): RoadSpec[] {
         return [
-            { name: 'Northbound Bottom', orientation: 'ns', direction: 'n', startY: 7, endY: 10, x: 1 },
-            { name: 'Southbound Bottom', orientation: 'ns', direction: 's', startY: 7, endY: 10, x: 0 },
+            { name: 'Northbound Bottom', orientation: 'ns', direction: 'n', startY: 7, endY: 10, x: 0 },
+            { name: 'Southbound Bottom', orientation: 'ns', direction: 's', startY: 7, endY: 10, x: 1 },
             { name: 'Southbound Top', orientation: 'ns', direction: 's', startY: -10, endY: -9, x: 0 },
             { name: 'Northbound Top', orientation: 'ns', direction: 'n', startY: -10, endY: -9, x: 1 },
-            { name: 'Eastbound Left', orientation: 'ew', direction: 'e', startX: -10, endX: -7, y: 1 },
-            { name: 'Westbound Left', orientation: 'ew', direction: 'w', startX: -10, endX: -7, y: 0 },
+            { name: 'Eastbound Left', orientation: 'ew', direction: 'e', startX: -10, endX: -7, y: 0 },
+            { name: 'Westbound Left', orientation: 'ew', direction: 'w', startX: -10, endX: -7, y: 1 },
             { name: 'Westbound Right', orientation: 'ew', direction: 'w', startX: 7, endX: 10, y: 0 },
             { name: 'Eastbound Right', orientation: 'ew', direction: 'e', startX: 7, endX: 10, y: 1 }
         ];
@@ -57,14 +57,14 @@ export class LevelBuilder2 extends GameWrapper
     protected getRoutes() {
         const destinations = {
             top: { gridX: 1, gridY: -10 },
-            bottom: { gridX: 0, gridY: 10 },
-            left: { gridX: -10, gridY: 0 },
+            bottom: { gridX: 1, gridY: 10 },
+            left: { gridX: -10, gridY: 1 },
             right: { gridX: 10, gridY: 1 }
         };
 
         const sources = [
             {
-                source: { gridX: 1, gridY: 10 },
+                source: { gridX: 0, gridY: 10 },
                 destinations: [destinations.top, destinations.left, destinations.right],
                 labelOffsets: [
                     { x: 16, y: -24 },
@@ -82,7 +82,7 @@ export class LevelBuilder2 extends GameWrapper
                 ]
             },
             {
-                source: { gridX: -10, gridY: 1 },
+                source: { gridX: -10, gridY: 0 },
                 destinations: [destinations.top, destinations.bottom, destinations.right],
                 labelOffsets: [
                     { x: 16, y: -24 },

@@ -29,7 +29,7 @@ export class LevelBuilder1 extends GameWrapper
             this.addArrow(spec, { ...arrowOptions, gridOffset: arrowOffsets[spec.name] });
         }
 
-        this.createText('Connect the roads to let cars pass through!', 220, 300, { fontFamily: 'Pixeled', fontSize: '12px', color: '#f2f2f2' }, { depth: Layers.Grass + 99 });
+        this.createText('Connect the roads, then press Start.', 220, 300, { fontFamily: 'Pixeled', fontSize: '12px', color: '#f2f2f2' }, { depth: Layers.Grass + 99 });
     }
 
     protected getInitialRoadSpecs(): RoadSpec[] {
@@ -46,22 +46,22 @@ export class LevelBuilder1 extends GameWrapper
         const north = this.createRouteFromGrid(
             { gridX: 0, gridY: 10 },
             { gridX: 0, gridY: -10 },
-            { target: 10, labelOffset: { x: 16, y: -18 } }
+            { target: 3, labelOffset: { x: 16, y: -18 } }
         );
         const northeast = this.createRouteFromGrid(
             { gridX: 0, gridY: 10 },
             { gridX: 10, gridY: 0 },
-            { target: 10, labelOffset: { x: 16, y: -2 } }
+            { target: 3, labelOffset: { x: 16, y: -2 } }
         );
         const east = this.createRouteFromGrid(
             { gridX: -10, gridY: 0 },
             { gridX: 10, gridY: 0 },
-            { target: 10, labelOffset: { x: 16, y: -18 } }
+            { target: 3, labelOffset: { x: 16, y: -18 } }
         );
         const southeast = this.createRouteFromGrid(
             { gridX: -10, gridY: 0 },
             { gridX: 0, gridY: -10 },
-            { target: 10, labelOffset: { x: 16, y: -2 } }
+            { target: 3, labelOffset: { x: 16, y: -2 } }
         );
 
         if (north) routes.push(north);

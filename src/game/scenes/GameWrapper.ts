@@ -54,6 +54,11 @@ type RouteTracker = {
     label: Phaser.GameObjects.Text;
 };
 
+type BuildingOptions = SpritePlacementOptions & {
+    textureKey?: string;
+    gridOffset?: { x?: number; y?: number };
+};
+
 type RoadInstance = ReturnType<RoadNetwork['getRoads']>[number];
 
 export abstract class GameWrapper extends Scene
@@ -63,9 +68,11 @@ export abstract class GameWrapper extends Scene
     roadNetwork: RoadNetwork;
     cars: Car[] = [];
     navigators: Navigator[] = [];
-    protected crashDistance = 20;
+    protected crashDistance = 10;
     private crashTriggered = false;
     private failureUi: Phaser.GameObjects.Container | null = null;
+    private completionUi: Phaser.GameObjects.Container | null = null;
+    private completionTriggered = false;
 
     private buildMode = false;
     private buildState: 'idle' | 'started' | 'confirm' = 'idle';
@@ -85,8 +92,17 @@ export abstract class GameWrapper extends Scene
     private selectedRoad: RoadInstance | null = null;
     private selectionSprites: Phaser.GameObjects.Image[] = [];
     private carRouteMap: Map<Car, RouteTracker> = new Map();
+    private buildingCells: Set<string> = new Set();
+    private buildingSprites: Phaser.GameObjects.Image[] = [];
 
     private static readonly SELECTION_TEXTURE_KEY = 'road-selection-iso';
+    private static readonly LEVEL_SEQUENCE = [
+        'LevelBuilder1',
+        'LevelBuilder2',
+        'LevelBuilder3',
+        'LevelBuilder4',
+        'LevelBuilder5'
+    ];
 
     constructor (key: string)
     {
@@ -97,6 +113,8 @@ export abstract class GameWrapper extends Scene
     init(): void {
         this.crashTriggered = false;
         this.failureUi = null;
+        this.completionUi = null;
+        this.completionTriggered = false;
         this.cars = [];
         this.navigators = [];
 
@@ -118,6 +136,9 @@ export abstract class GameWrapper extends Scene
         this.selectedRoad = null;
         this.selectionSprites = [];
         this.carRouteMap.clear();
+        this.buildingCells.clear();
+        this.buildingSprites.forEach((sprite) => sprite.destroy());
+        this.buildingSprites = [];
 
         if (this.isBuilderEnabled()) {
             EventBus.emit('builder:clear');
@@ -377,6 +398,21 @@ export abstract class GameWrapper extends Scene
         return this.createText(text, x, y, style, options);
     }
 
+    protected addBuilding(gridX: number, gridY: number, options: BuildingOptions = {}): Phaser.GameObjects.Image {
+        const textureKey = options.textureKey ?? 'skyscraper';
+        const renderGridX = gridX + (options.gridOffset?.x ?? 0);
+        const renderGridY = gridY + (options.gridOffset?.y ?? 0);
+        const sprite = this.createGridSprite(textureKey, renderGridX, renderGridY, options);
+
+        if (typeof options.depth !== 'number') {
+            sprite.setDepth(Layers.Buildings + 2 + (sprite.y / 1000));
+        }
+
+        this.buildingCells.add(this.buildingKey(gridX, gridY));
+        this.buildingSprites.push(sprite);
+        return sprite;
+    }
+
     addArrow(spec: RoadSpec, options: ArrowOptions = {}): Phaser.GameObjects.Image {
         let gridX = 0;
         let gridY = 0;
@@ -408,7 +444,8 @@ export abstract class GameWrapper extends Scene
     update (_time: number, delta: number)
     {
         this.positionFailureUi();
-        if (this.crashTriggered) {
+        this.positionCompletionUi();
+        if (this.crashTriggered || this.completionTriggered) {
             return;
         }
 
@@ -424,6 +461,7 @@ export abstract class GameWrapper extends Scene
                     tracker.count += 1;
                     this.updateRouteLabel(tracker);
                     this.carRouteMap.delete(car);
+                    this.checkLevelComplete();
                 }
                 this.onCarFinished(car);
                 car.destroy();
@@ -546,9 +584,14 @@ export abstract class GameWrapper extends Scene
     private restartScene(): void {
         this.stopSimulation();
         this.crashTriggered = false;
+        this.completionTriggered = false;
         if (this.failureUi) {
             this.failureUi.destroy(true);
             this.failureUi = null;
+        }
+        if (this.completionUi) {
+            this.completionUi.destroy(true);
+            this.completionUi = null;
         }
 
         this.scene.restart();
@@ -563,6 +606,17 @@ export abstract class GameWrapper extends Scene
         const scale = cam.zoom === 0 ? 1 : (1 / cam.zoom);
         this.failureUi.setPosition(this.scale.width / 2, this.scale.height / 2);
         this.failureUi.setScale(scale);
+    }
+
+    private positionCompletionUi(): void {
+        if (!this.completionUi) {
+            return;
+        }
+
+        const cam = this.cameras.main;
+        const scale = cam.zoom === 0 ? 1 : (1 / cam.zoom);
+        this.completionUi.setPosition(this.scale.width / 2, this.scale.height / 2);
+        this.completionUi.setScale(scale);
     }
 
     private bindBuilderEvents(): void {
@@ -909,8 +963,7 @@ export abstract class GameWrapper extends Scene
     }
 
     private checkRoadBuild(_cells: GridPoint[]): boolean {
-        const buildings: GridPoint[] = [];
-        return buildings.length === 0;
+        return _cells.every((cell) => !this.buildingCells.has(this.buildingKey(cell.gridX, cell.gridY)));
     }
 
     private isTrafficLightClick(pointer: Phaser.Input.Pointer): boolean {
@@ -1131,7 +1184,7 @@ export abstract class GameWrapper extends Scene
     }
 
     private startSimulation(): void {
-        if (this.simulationRunning) {
+        if (this.simulationRunning || this.completionTriggered) {
             return;
         }
 
@@ -1151,14 +1204,18 @@ export abstract class GameWrapper extends Scene
             EventBus.emit('builder:clear');
         }
 
-        for (const tracker of this.builderRoutes) {
+        const sourceGroups = this.groupRoutesBySource(this.builderRoutes);
+        for (const group of sourceGroups.values()) {
             const spawnOnce = () => {
                 if (!this.simulationRunning || this.simulationToken !== token) {
                     return;
                 }
-                const car = this.spawnCar(tracker.route.road, 60, tracker.route.source, tracker.route.destination);
-                if (car) {
-                    this.carRouteMap.set(car, tracker);
+                const tracker = Phaser.Utils.Array.GetRandom(group);
+                if (tracker) {
+                    const car = this.spawnCar(tracker.route.road, 60, tracker.route.source, tracker.route.destination);
+                    if (car) {
+                        this.carRouteMap.set(car, tracker);
+                    }
                 }
 
                 const nextDelay = Phaser.Math.Between(800, 1800);
@@ -1197,10 +1254,144 @@ export abstract class GameWrapper extends Scene
         tracker.label.setText(`${tracker.count}/${tracker.target}`);
     }
 
+    private groupRoutesBySource(routes: RouteTracker[]): Map<string, RouteTracker[]> {
+        const groups = new Map<string, RouteTracker[]>();
+
+        for (const tracker of routes) {
+            const key = `${tracker.route.source.gridX},${tracker.route.source.gridY}`;
+            const list = groups.get(key);
+            if (list) {
+                list.push(tracker);
+            } else {
+                groups.set(key, [tracker]);
+            }
+        }
+
+        return groups;
+    }
+
+    private checkLevelComplete(): void {
+        if (this.completionTriggered || !this.builderRoutes.length) {
+            return;
+        }
+
+        const complete = this.builderRoutes.every((tracker) => tracker.count >= tracker.target);
+        if (!complete) {
+            return;
+        }
+
+        this.triggerCompletion();
+    }
+
+    private triggerCompletion(): void {
+        this.stopSimulation();
+        EventBus.emit('simulation:lock', { locked: true });
+
+        if (this.buildMode) {
+            this.buildMode = false;
+            this.cancelBuild();
+            EventBus.emit('builder:clear');
+        }
+
+        this.completionTriggered = true;
+        this.showCompletionUi();
+    }
+
+    private showCompletionUi(): void {
+        if (this.completionUi) {
+            return;
+        }
+
+        const centerX = this.scale.width / 2;
+        const centerY = this.scale.height / 2;
+        const nextScene = this.getNextSceneKey();
+        const isFinal = !nextScene;
+
+        const panel = this.add.rectangle(0, 0, 520, 240, 0x0f0f0f, 0.85)
+            .setStrokeStyle(2, 0xffffff, 0.7)
+            .setScrollFactor(0)
+            .setDepth(Layers.UI + 14);
+
+        const title = this.add.text(0, -60, isFinal ? 'All levels complete!' : 'Level complete!', {
+            fontFamily: 'Pixeled',
+            fontSize: '26px',
+            color: '#ffffff'
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(Layers.UI + 15);
+
+        const leftLabel = isFinal ? 'Main menu' : 'Next Level';
+        const rightLabel = 'Again?';
+
+        const left = this.createCompletionButton(-120, 40, leftLabel, () => {
+            if (nextScene) {
+                this.scene.start(nextScene);
+            } else {
+                this.scene.start('MainMenu');
+            }
+        });
+
+        const right = this.createCompletionButton(120, 40, rightLabel, () => this.restartScene());
+
+        this.completionUi = this.add.container(centerX, centerY, [
+            panel,
+            title,
+            left.bg,
+            left.text,
+            right.bg,
+            right.text
+        ]);
+        this.completionUi.setScrollFactor(0);
+        this.completionUi.setDepth(Layers.UI + 16);
+        this.positionCompletionUi();
+    }
+
+    private createCompletionButton(x: number, y: number, label: string, onClick: () => void): { bg: Phaser.GameObjects.Rectangle; text: Phaser.GameObjects.Text } {
+        const text = this.add.text(x, y, label, {
+            fontFamily: 'Pixeled',
+            fontSize: '18px',
+            color: '#ffffff'
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(Layers.UI + 16);
+
+        const bg = this.add.rectangle(x, y, 190, 48, 0x1b1b1b, 0.8)
+            .setStrokeStyle(2, 0xffffff, 0.7)
+            .setScrollFactor(0)
+            .setDepth(Layers.UI + 15);
+
+        const setHover = (active: boolean) => {
+            bg.setFillStyle(0x2a2a2a, active ? 0.95 : 0.8);
+            text.setColor(active ? '#ffd36a' : '#ffffff');
+        };
+
+        bg.setInteractive({ useHandCursor: true })
+            .on('pointerover', () => setHover(true))
+            .on('pointerout', () => setHover(false))
+            .on('pointerdown', onClick);
+
+        text.setInteractive({ useHandCursor: true })
+            .on('pointerover', () => setHover(true))
+            .on('pointerout', () => setHover(false))
+            .on('pointerdown', onClick);
+
+        return { bg, text };
+    }
+
+    private getNextSceneKey(): string | null {
+        const current = this.scene.key;
+        const index = GameWrapper.LEVEL_SEQUENCE.indexOf(current);
+        if (index === -1) {
+            return null;
+        }
+
+        return GameWrapper.LEVEL_SEQUENCE[index + 1] ?? null;
+    }
+
     private clearRouteTrackers(): void {
         this.builderRoutes.forEach((tracker) => tracker.label.destroy());
         this.builderRoutes = [];
         this.carRouteMap.clear();
+    }
+
+    private buildingKey(gridX: number, gridY: number): string {
+        return `${gridX},${gridY}`;
     }
 
     private notifyUi(message: string, durationMs: number = 3000): void {

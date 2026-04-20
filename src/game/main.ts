@@ -5,6 +5,9 @@ import { Level1 } from './scenes/old/Level1';
 import { Level2 } from './scenes/old/Level2';
 import { LevelBuilder1 } from './scenes/Levels/LevelBuilder1';
 import { LevelBuilder2 } from './scenes/Levels/LevelBuilder2';
+import { LevelBuilder5 } from './scenes/Levels/LevelBuilder5';
+import { LevelBuilder4 } from './scenes/Levels/LevelBuilder4';
+import { LevelBuilder3 } from './scenes/Levels/LevelBuilder3';
 import { MainMenu } from './scenes/MainMenu';
 import { AUTO, Game } from 'phaser';
 import { Preloader } from './scenes/Preloader';
@@ -26,6 +29,9 @@ const config: Phaser.Types.Core.GameConfig = {
         Level2,
         LevelBuilder1,
         LevelBuilder2,
+        LevelBuilder3,
+        LevelBuilder4,
+        LevelBuilder5,
         TestGame,
         GameOver
     ]

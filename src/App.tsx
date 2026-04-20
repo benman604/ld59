@@ -28,14 +28,15 @@ function App()
             const scene = phaserRef.current?.scene;
             if (scene && scene.input && scene.input.activePointer) {
                 const pointer = scene.input.activePointer;
-                const x = Math.round(pointer.worldX ?? pointer.x);
-                const y = Math.round(pointer.worldY ?? pointer.y);
+                const worldPoint = scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
+                const x = Math.round(worldPoint.x);
+                const y = Math.round(worldPoint.y);
 
                 setMousePosition({ x, y });
 
                 const roadNetwork = (scene as any).roadNetwork;
                 if (roadNetwork?.getGridFromIso) {
-                    const grid = roadNetwork.getGridFromIso(pointer.worldX ?? pointer.x, pointer.worldY ?? pointer.y);
+                    const grid = roadNetwork.getGridFromIso(worldPoint.x, worldPoint.y);
                     setGridPosition({ x: grid.gridX, y: grid.gridY });
                 }
             }

@@ -12,11 +12,11 @@ type RouteLabelPlan = {
     target?: number;
 };
 
-export class LevelBuilder2 extends GameWrapper
+export class LevelBuilder5 extends GameWrapper
 {
     constructor ()
     {
-        super('LevelBuilder2');
+        super('LevelBuilder5');
     }
 
     protected isBuilderEnabled(): boolean {
@@ -29,98 +29,92 @@ export class LevelBuilder2 extends GameWrapper
 
     protected setupLevel(): void {
         const arrowOptions = { depth: Layers.Roads + 5, shift: { x: 0, y: 15 }, scale: 1.5 };
-        const arrowOffsets: Record<string, { x?: number; y?: number }> = {
-            'Northbound Bottom': { y: -2 },
-            'Southbound Bottom': { y: -2 },
-            'Westbound Right': { x: -2 },
-            'Eastbound Right': { x: -2 }
-        };
 
         for (const spec of this.getInitialRoadSpecs()) {
-            this.addArrow(spec, { ...arrowOptions, gridOffset: arrowOffsets[spec.name] });
+            this.addArrow(spec, arrowOptions);
         }
 
-        this.createText(
-            'Is something flipped?',
-            350,
-            300,
-            { fontFamily: 'Pixeled', fontSize: '12px', color: '#f2f2f2' },
-            { depth: Layers.Grass + 99 }
-        );
+        const buildings = [
+            { gridX: -2, gridY: 0 },
+            { gridX: -2, gridY: 1 },
+            { gridX: -2, gridY: -1 },
+            { gridX: 6, gridY: 0 },
+            { gridX: 6, gridY: 1 },
+            { gridX: 6, gridY: -1 },
+            { gridX: 0, gridY: 3 },
+            { gridX: 5, gridY: 3 },
+            { gridX: 12, gridY: 12},
+            { gridX: 13, gridY: 12},
+            { gridX: 14, gridY: 12},
+        ];
+
+        for (const building of buildings) {
+            this.addBuilding(building.gridX - 2, building.gridY - 2, { gridOffset: { x: 2, y: 2 } });
+        }
     }
 
     protected getInitialRoadSpecs(): RoadSpec[] {
         return [
-            { name: 'Northbound Bottom', orientation: 'ns', direction: 'n', startY: 7, endY: 10, x: 0 },
-            { name: 'Southbound Bottom', orientation: 'ns', direction: 's', startY: 7, endY: 10, x: 1 },
-            { name: 'Southbound Top', orientation: 'ns', direction: 's', startY: -10, endY: -9, x: 0 },
-            { name: 'Northbound Top', orientation: 'ns', direction: 'n', startY: -10, endY: -9, x: 1 },
-            { name: 'Eastbound Left', orientation: 'ew', direction: 'e', startX: -10, endX: -7, y: 0 },
-            { name: 'Westbound Left', orientation: 'ew', direction: 'w', startX: -10, endX: -7, y: 1 },
-            { name: 'Westbound Right', orientation: 'ew', direction: 'w', startX: 7, endX: 10, y: 0 },
-            { name: 'Eastbound Right', orientation: 'ew', direction: 'e', startX: 7, endX: 10, y: 1 }
+            { name: 'Center Dest N', orientation: 'ns', direction: 'n', startY: -1, endY: 1, x: 1 },
+            { name: 'Center Source S1', orientation: 'ns', direction: 's', startY: -1, endY: 1, x: 2 },
+            { name: 'Center Source S2', orientation: 'ns', direction: 's', startY: -1, endY: 1, x: 3 },
+            { name: 'Center Source S3', orientation: 'ns', direction: 's', startY: -1, endY: 1, x: 4 },
+            { name: 'Right Dest N', orientation: 'ns', direction: 'n', startY: -1, endY: 1, x: 20 },
+            { name: 'Right Source S', orientation: 'ns', direction: 's', startY: -1, endY: 1, x: 21 },
+            { name: 'West Source', orientation: 'ew', direction: 'w', startX: 5, endX: 3, y: 10 },
+            { name: 'East Source', orientation: 'ew', direction: 'e', startX: -10, endX: -8, y: -10 },
+            { name: 'Westbound Destination', orientation: 'ew', direction: 'w', startX: 12, endX: 10, y: 20 }
         ];
     }
 
     protected getRoutes() {
-        const sources = [
-            {
-                source: { gridX: 0, gridY: 10 },
-                labelOffsets: [
-                    { x: 16, y: -28 },
-                    { x: 16, y: -12 },
-                    { x: 16, y: 4 },
-                    { x: 16, y: 20 }
-                ]
-            },
-            {
-                source: { gridX: 0, gridY: -10 },
-                labelOffsets: [
-                    { x: 16, y: 4 },
-                    { x: 16, y: 20 },
-                    { x: 16, y: 36 },
-                    { x: 16, y: 52 }
-                ]
-            },
-            {
-                source: { gridX: -10, gridY: 0 },
-                labelOffsets: [
-                    { x: 16, y: -28 },
-                    { x: 16, y: -12 },
-                    { x: 16, y: 4 },
-                    { x: 16, y: 20 }
-                ]
-            },
-            {
-                source: { gridX: 10, gridY: 0 },
-                labelOffsets: [
-                    { x: -36, y: -28 },
-                    { x: -36, y: -12 },
-                    { x: -36, y: 4 },
-                    { x: -36, y: 20 }
-                ]
-            }
+        const centerSources = [
+            { gridX: 2, gridY: -1 },
+            { gridX: 3, gridY: -1 },
+            { gridX: 4, gridY: -1 }
         ];
-
+        const otherSources = [
+            { gridX: 21, gridY: -1 },
+            { gridX: 5, gridY: 10 },
+            { gridX: -10, gridY: -10 }
+        ];
         const destinations = [
-            { gridX: 1, gridY: -10 },
-            { gridX: 1, gridY: 10 },
-            { gridX: -10, gridY: 1 },
-            { gridX: 10, gridY: 1 }
+            { gridX: 1, gridY: -1 },
+            { gridX: 20, gridY: -1 },
+            { gridX: 10, gridY: 20 }
         ];
 
         const plans: RouteLabelPlan[] = [];
-        for (const entry of sources) {
-            entry.labelOffsets.forEach((labelOffset, index) => {
-                const destination = destinations[index];
-                if (destination) {
-                    plans.push({
-                        source: entry.source,
-                        destination,
-                        labelOffset,
-                        target: 10
-                    });
-                }
+
+        const makeOffsets = (source: GridPoint, count: number) => {
+            const xOffset = source.gridX > 10 ? -36 : 16;
+            const baseY = source.gridY < 0 ? 8 : -24;
+            return Array.from({ length: count }, (_value, index) => ({
+                x: xOffset,
+                y: baseY + (index * 16)
+            }));
+        };
+
+        for (const source of otherSources) {
+            const offsets = makeOffsets(source, destinations.length);
+            destinations.forEach((destination, index) => {
+                plans.push({
+                    source,
+                    destination,
+                    labelOffset: offsets[index],
+                    target: 5
+                });
+            });
+        }
+
+        const farDestination = destinations[2];
+        for (const source of centerSources) {
+            const offsets = makeOffsets(source, 1);
+            plans.push({
+                source,
+                destination: farDestination,
+                labelOffset: offsets[0],
+                target: 5
             });
         }
 
