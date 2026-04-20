@@ -12,7 +12,7 @@ export function RoadInspector({ summary, onDelete }: RoadInspectorProps) {
 
     return (
         <div className="spritePosition">
-            <div>Build {summary.name}</div>
+            <div>{summary.name}</div>
             <div>{summary.length} blocks</div>
             <div>{summary.intersections} intersections</div>
             <div>

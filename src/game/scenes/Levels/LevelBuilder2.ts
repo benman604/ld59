@@ -28,6 +28,7 @@ export class LevelBuilder2 extends GameWrapper
     }
 
     protected setupLevel(): void {
+        this.setBudget(2100);
         const arrowOptions = { depth: Layers.Roads + 5, shift: { x: 0, y: 15 }, scale: 1.5 };
         const arrowOffsets: Record<string, { x?: number; y?: number }> = {
             'Northbound Bottom': { y: -2 },

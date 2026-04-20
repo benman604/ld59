@@ -28,6 +28,7 @@ export class LevelBuilder5 extends GameWrapper
     }
 
     protected setupLevel(): void {
+        this.setBudget(7000);
         const arrowOptions = { depth: Layers.Roads + 5, shift: { x: 0, y: 15 }, scale: 1.5 };
 
         for (const spec of this.getInitialRoadSpecs()) {
@@ -41,7 +42,6 @@ export class LevelBuilder5 extends GameWrapper
             { gridX: 6, gridY: 0 },
             { gridX: 6, gridY: 1 },
             { gridX: 6, gridY: -1 },
-            { gridX: 0, gridY: 3 },
             { gridX: 5, gridY: 3 },
             { gridX: 12, gridY: 12},
             { gridX: 13, gridY: 12},
@@ -49,7 +49,7 @@ export class LevelBuilder5 extends GameWrapper
         ];
 
         for (const building of buildings) {
-            this.addBuilding(building.gridX - 2, building.gridY - 2, { gridOffset: { x: 2, y: 2 } });
+            this.addBuilding(building.gridX + 1, building.gridY + 1, { gridOffset: { x: -2, y: -2 } });
         }
     }
 

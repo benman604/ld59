@@ -19,6 +19,7 @@ export class LevelBuilder1 extends GameWrapper
     }
 
     protected setupLevel(): void {
+        this.setBudget(1100);
         const arrowOptions = { depth: Layers.Roads+5, shift: { x: 0, y: 15 }, scale: 1.5 };
         const arrowOffsets: Record<string, { x?: number; y?: number }> = {
             'Northbound 1': { y: -2 },
@@ -29,7 +30,7 @@ export class LevelBuilder1 extends GameWrapper
             this.addArrow(spec, { ...arrowOptions, gridOffset: arrowOffsets[spec.name] });
         }
 
-        this.createText('Connect the roads, then press Start.', 220, 300, { fontFamily: 'Pixeled', fontSize: '12px', color: '#f2f2f2' }, { depth: Layers.Grass + 99 });
+        this.createText('Build the intersection, then press Start.', 220, 300, { fontFamily: 'Pixeled', fontSize: '12px', color: '#f2f2f2' }, { depth: Layers.Grass + 99 });
     }
 
     protected getInitialRoadSpecs(): RoadSpec[] {

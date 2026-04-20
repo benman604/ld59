@@ -18,6 +18,10 @@ function App()
     const [isBuilderScene, setIsBuilderScene] = useState(false);
     const [simulationRunning, setSimulationRunning] = useState(false);
     const [simulationLocked, setSimulationLocked] = useState(false);
+    const [simulationPaused, setSimulationPaused] = useState(false);
+    const [menuOpen, setMenuOpen] = useState(false);
+    const [budgetRemaining, setBudgetRemaining] = useState<number | null>(null);
+    const [budgetTotal, setBudgetTotal] = useState<number | null>(null);
     const [notification, setNotification] = useState<string | null>(null);
     const notificationTimerRef = useRef<number | null>(null);
 
@@ -100,6 +104,8 @@ function App()
         const handleSimulationStarted = () => {
             setSimulationRunning(true);
             setSimulationLocked(false);
+            setSimulationPaused(false);
+            setMenuOpen(false);
             setBuildMode(false);
             setBuildSummary(null);
             setRoadSummary(null);
@@ -108,6 +114,8 @@ function App()
         const handleSimulationStopped = () => {
             setSimulationRunning(false);
             setSimulationLocked(false);
+            setSimulationPaused(false);
+            setMenuOpen(false);
             setBuildMode(false);
         };
 
@@ -119,6 +127,26 @@ function App()
             EventBus.removeListener('simulation:lock', handleSimulationLock);
             EventBus.removeListener('simulation:started', handleSimulationStarted);
             EventBus.removeListener('simulation:stopped', handleSimulationStopped);
+        };
+    }, []);
+
+    useEffect(() => {
+        const handlePaused = () => {
+            setSimulationPaused(true);
+            setMenuOpen(true);
+        };
+
+        const handleResumed = () => {
+            setSimulationPaused(false);
+            setMenuOpen(false);
+        };
+
+        EventBus.on('simulation:paused', handlePaused);
+        EventBus.on('simulation:resumed', handleResumed);
+
+        return () => {
+            EventBus.removeListener('simulation:paused', handlePaused);
+            EventBus.removeListener('simulation:resumed', handleResumed);
         };
     }, []);
 
@@ -140,6 +168,19 @@ function App()
         };
     }, []);
 
+    useEffect(() => {
+        const handleBudgetUpdate = (payload: { remaining: number; total: number }) => {
+            setBudgetRemaining(payload.remaining);
+            setBudgetTotal(payload.total);
+        };
+
+        EventBus.on('budget:update', handleBudgetUpdate);
+
+        return () => {
+            EventBus.removeListener('budget:update', handleBudgetUpdate);
+        };
+    }, []);
+
     // Event emitted from the PhaserGame component
     const currentScene = (scene: Phaser.Scene) => {
 
@@ -151,7 +192,11 @@ function App()
             setRoadSummary(null);
             setSimulationRunning(false);
             setSimulationLocked(false);
+            setSimulationPaused(false);
+            setMenuOpen(false);
             setNotification(null);
+            setBudgetRemaining(null);
+            setBudgetTotal(null);
         }
         
     }
@@ -191,6 +236,49 @@ function App()
         EventBus.emit('simulation:stop');
     };
 
+    const pauseSimulation = () => {
+        EventBus.emit('simulation:pause');
+    };
+
+    const resumeSimulation = () => {
+        EventBus.emit('simulation:resume');
+    };
+
+    const restartSimulation = () => {
+        EventBus.emit('simulation:restart');
+    };
+
+    const openMenu = () => {
+        if (simulationRunning && !simulationPaused) {
+            pauseSimulation();
+        }
+        setMenuOpen(true);
+    };
+
+    const handleResumeClick = () => {
+        if (simulationPaused) {
+            resumeSimulation();
+        }
+        setMenuOpen(false);
+    };
+
+    const handleRestartClick = () => {
+        restartSimulation();
+        setMenuOpen(false);
+    };
+
+    const spentBudget = (budgetRemaining !== null && budgetTotal !== null)
+        ? Math.max(0, budgetTotal - budgetRemaining)
+        : null;
+
+    const pendingCost = buildSummary?.cost ?? null;
+    const pendingRemaining = (budgetRemaining !== null && pendingCost !== null)
+        ? budgetRemaining - pendingCost
+        : null;
+    const pendingSpent = (spentBudget !== null && pendingCost !== null)
+        ? spentBudget + pendingCost
+        : null;
+
     return (
         <div id="app">
             <div className="game-shell">
@@ -203,27 +291,82 @@ function App()
                 {isBuilderScene && (
                     <>
                         <div className="ui-overlay-left">
-                            <button
-                                className="button button--text"
-                                onClick={simulationRunning ? stopSimulation : startSimulation}
-                                disabled={simulationRunning ? simulationLocked : false}
-                            >
-                                {simulationRunning ? 'Stop' : 'Start'}
-                            </button>
+                            {!menuOpen && (
+                                <>
+                                    <button
+                                        className="button button--text"
+                                        onClick={simulationRunning ? stopSimulation : startSimulation}
+                                        disabled={simulationRunning ? (simulationLocked) : false}
+                                    >
+                                        {simulationRunning ? 'Stop' : 'Start'}
+                                    </button>
+                                    <button
+                                        className="button button--text"
+                                        onClick={openMenu}
+                                        disabled={simulationLocked}
+                                    >
+                                        Menu
+                                    </button>
+                                </>
+                            )}
+                            {menuOpen && (
+                                <>
+                                    <button
+                                        className="button button--text"
+                                        onClick={handleResumeClick}
+                                        style={{marginTop: 60}}
+                                    >
+                                        Resume
+                                    </button>
+                                    <button
+                                        className="button button--text"
+                                        onClick={handleRestartClick}
+                                    >
+                                        Start Over
+                                    </button>
+                                </>
+                            )}
                         </div>
-                        <div className="ui-overlay">
-                            <BuildPanel
-                                isBuilderScene={isBuilderScene}
-                                buildMode={buildMode}
-                                buildSummary={buildSummary}
-                                disabled={simulationRunning}
-                                onToggleBuildMode={toggleBuildMode}
-                                onConfirmBuild={confirmBuild}
-                                onCancelBuild={cancelBuild}
-                            />
-                            <RoadInspector summary={roadSummary} onDelete={deleteRoad} />
-                        </div>
+                        {!menuOpen && (
+                            <div className="ui-overlay">
+                                <BuildPanel
+                                    isBuilderScene={isBuilderScene}
+                                    buildMode={buildMode}
+                                    buildSummary={buildSummary}
+                                    disabled={simulationRunning}
+                                    onToggleBuildMode={toggleBuildMode}
+                                    onConfirmBuild={confirmBuild}
+                                    onCancelBuild={cancelBuild}
+                                />
+                                <RoadInspector summary={roadSummary} onDelete={deleteRoad} />
+                            </div>
+                        )}
                     </>
+                )}
+                {budgetRemaining !== null && budgetTotal !== null && (
+                    <div className="ui-budget-panel">
+                        <div className="ui-budget">
+                            {pendingCost !== null && pendingRemaining !== null && pendingSpent !== null ? (
+                                <>
+                                    <div className="ui-budget__label">
+                                        Remaining Budget:
+                                    </div>
+                                    <div className='ui-budget__value'>
+                                        ${budgetRemaining} - ${pendingCost} = ${pendingRemaining}
+                                    </div>
+                                    <div className="ui-budget__spent">
+                                        Spent: ${spentBudget} + ${pendingCost} = ${pendingSpent}
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="ui-budget__label">Remaining Budget:</div>
+                                    <div className="ui-budget__value">${budgetRemaining}</div>
+                                    <div className="ui-budget__spent">Spent: ${spentBudget}</div>
+                                </>
+                            )}
+                        </div>
+                    </div>
                 )}
             </div>
             <PositionPanel

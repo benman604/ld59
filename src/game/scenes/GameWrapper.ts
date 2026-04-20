@@ -82,11 +82,15 @@ export abstract class GameWrapper extends Scene
     private previewArrows: Phaser.GameObjects.Image[] = [];
     private idleIndicator: Phaser.GameObjects.Image | null = null;
     private pendingSpec: RoadSpec | null = null;
+    private pendingCost: number | null = null;
     private baseRoadSpecs: RoadSpec[] = [];
     private playerRoadSpecs: RoadSpec[] = [];
     private builderRoutes: RouteTracker[] = [];
     private simulationRunning = false;
+    private simulationPaused = false;
     private simulationToken = 0;
+    private budgetTotal: number | null = null;
+    private budgetRemaining: number | null = null;
     private modeHint: Phaser.GameObjects.Text | null = null;
     private clickStart: { x: number; y: number } | null = null;
     private selectedRoad: RoadInstance | null = null;
@@ -126,11 +130,15 @@ export abstract class GameWrapper extends Scene
         this.previewArrows = [];
         this.idleIndicator = null;
         this.pendingSpec = null;
+        this.pendingCost = null;
         this.baseRoadSpecs = this.isBuilderEnabled() ? this.getInitialRoadSpecs() : [];
         this.playerRoadSpecs = [];
         this.builderRoutes = [];
         this.simulationRunning = false;
+        this.simulationPaused = false;
         this.simulationToken = 0;
+        this.budgetTotal = null;
+        this.budgetRemaining = null;
         this.modeHint = null;
         this.clickStart = null;
         this.selectedRoad = null;
@@ -273,6 +281,12 @@ export abstract class GameWrapper extends Scene
         const roadNetwork = new RoadNetwork(this, origin.x, origin.y);
         roadNetwork.build(this.getAllRoadSpecs());
         return roadNetwork;
+    }
+
+    protected setBudget(total: number): void {
+        this.budgetTotal = Math.max(0, Math.floor(total));
+        this.budgetRemaining = this.budgetTotal;
+        this.emitBudgetUpdate();
     }
 
     protected startSpawning(routeGroups: Route[][], minDelayMs: number, maxDelayMs: number, speed: number): void {
@@ -641,8 +655,16 @@ export abstract class GameWrapper extends Scene
                 return;
             }
 
+            if (!this.canAffordPendingBuild()) {
+                return;
+            }
+
             this.mergeRoadSpec(this.pendingSpec);
+            if (typeof this.pendingCost === 'number') {
+                this.spendBudget(this.pendingCost);
+            }
             this.pendingSpec = null;
+            this.pendingCost = null;
             this.roadNetwork.build(this.getAllRoadSpecs());
             this.rebuildRoutes();
             this.clearPreview();
@@ -662,6 +684,12 @@ export abstract class GameWrapper extends Scene
                 return;
             }
 
+            const road = this.roadNetwork.getRoadByName(payload.name);
+            if (road) {
+                const summary = this.getRoadSummary(road);
+                this.refundBudget(summary.cost);
+            }
+
             this.playerRoadSpecs = this.playerRoadSpecs.filter((spec) => spec.name !== payload.name);
             this.roadNetwork.build(this.getAllRoadSpecs());
             this.rebuildRoutes();
@@ -677,12 +705,27 @@ export abstract class GameWrapper extends Scene
             this.stopSimulation();
         };
 
+        const handleSimulationPause = () => {
+            this.pauseSimulation();
+        };
+
+        const handleSimulationResume = () => {
+            this.resumeSimulation();
+        };
+
+        const handleSimulationRestart = () => {
+            this.restartScene();
+        };
+
         EventBus.on('builder:mode', handleMode);
         EventBus.on('builder:confirm', handleConfirm);
         EventBus.on('builder:cancel', handleCancel);
         EventBus.on('road:delete', handleDelete);
         EventBus.on('simulation:start', handleSimulationStart);
         EventBus.on('simulation:stop', handleSimulationStop);
+        EventBus.on('simulation:pause', handleSimulationPause);
+        EventBus.on('simulation:resume', handleSimulationResume);
+        EventBus.on('simulation:restart', handleSimulationRestart);
 
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
             EventBus.removeListener('builder:mode', handleMode);
@@ -691,6 +734,9 @@ export abstract class GameWrapper extends Scene
             EventBus.removeListener('road:delete', handleDelete);
             EventBus.removeListener('simulation:start', handleSimulationStart);
             EventBus.removeListener('simulation:stop', handleSimulationStop);
+            EventBus.removeListener('simulation:pause', handleSimulationPause);
+            EventBus.removeListener('simulation:resume', handleSimulationResume);
+            EventBus.removeListener('simulation:restart', handleSimulationRestart);
         });
     }
 
@@ -873,11 +919,13 @@ export abstract class GameWrapper extends Scene
         };
 
         if (!this.checkRoadBuild(path.cells)) {
+            this.notifyUi('Road intersects a building.');
             this.cancelBuild();
             return;
         }
 
         this.pendingSpec = pendingSpec;
+        this.pendingCost = cost;
         this.buildState = 'confirm';
         EventBus.emit('builder:proposal', summary);
     }
@@ -892,6 +940,7 @@ export abstract class GameWrapper extends Scene
         this.roadStart = null;
         this.previewEnd = null;
         this.pendingSpec = null;
+        this.pendingCost = null;
         this.buildState = 'idle';
     }
 
@@ -1194,6 +1243,7 @@ export abstract class GameWrapper extends Scene
         }
 
         this.simulationRunning = true;
+        this.simulationPaused = false;
         this.simulationToken += 1;
         const token = this.simulationToken;
         EventBus.emit('simulation:started');
@@ -1234,12 +1284,37 @@ export abstract class GameWrapper extends Scene
         this.simulationRunning = false;
         this.simulationToken += 1;
 
+        if (this.simulationPaused) {
+            this.simulationPaused = false;
+            this.scene.resume(this.scene.key);
+        }
+
         this.cars.forEach((car) => car.destroy());
         this.cars = [];
         this.navigators = [];
         this.carRouteMap.clear();
 
         EventBus.emit('simulation:stopped');
+    }
+
+    private pauseSimulation(): void {
+        if (!this.simulationRunning || this.simulationPaused || this.crashTriggered || this.completionTriggered) {
+            return;
+        }
+
+        this.simulationPaused = true;
+        this.scene.pause(this.scene.key);
+        EventBus.emit('simulation:paused');
+    }
+
+    private resumeSimulation(): void {
+        if (!this.simulationRunning || !this.simulationPaused) {
+            return;
+        }
+
+        this.simulationPaused = false;
+        this.scene.resume(this.scene.key);
+        EventBus.emit('simulation:resumed');
     }
 
     private areRoutesConnected(routes: RouteTracker[]): boolean {
@@ -1321,15 +1396,15 @@ export abstract class GameWrapper extends Scene
         const leftLabel = isFinal ? 'Main menu' : 'Next Level';
         const rightLabel = 'Again?';
 
-        const left = this.createCompletionButton(-120, 40, leftLabel, () => {
+        const left = this.createCompletionButton(-120, 40, rightLabel, () => this.restartScene());
+
+        const right = this.createCompletionButton(120, 40, leftLabel, () => {
             if (nextScene) {
                 this.scene.start(nextScene);
             } else {
                 this.scene.start('MainMenu');
             }
         });
-
-        const right = this.createCompletionButton(120, 40, rightLabel, () => this.restartScene());
 
         this.completionUi = this.add.container(centerX, centerY, [
             panel,
@@ -1396,6 +1471,49 @@ export abstract class GameWrapper extends Scene
 
     private notifyUi(message: string, durationMs: number = 3000): void {
         EventBus.emit('ui:notify', { message, durationMs });
+    }
+
+    private emitBudgetUpdate(): void {
+        if (this.budgetRemaining === null || this.budgetTotal === null) {
+            return;
+        }
+
+        EventBus.emit('budget:update', {
+            remaining: this.budgetRemaining,
+            total: this.budgetTotal
+        });
+    }
+
+    private spendBudget(cost: number): void {
+        if (this.budgetRemaining === null) {
+            return;
+        }
+
+        this.budgetRemaining = Math.max(0, this.budgetRemaining - cost);
+        this.emitBudgetUpdate();
+    }
+
+    private refundBudget(amount: number): void {
+        if (this.budgetRemaining === null) {
+            return;
+        }
+
+        const cap = this.budgetTotal ?? Number.POSITIVE_INFINITY;
+        this.budgetRemaining = Math.min(cap, this.budgetRemaining + amount);
+        this.emitBudgetUpdate();
+    }
+
+    private canAffordPendingBuild(): boolean {
+        if (this.budgetRemaining === null || this.pendingCost === null) {
+            return true;
+        }
+
+        if (this.pendingCost <= this.budgetRemaining) {
+            return true;
+        }
+
+        this.notifyUi(`Over budget: $${this.pendingCost} > $${this.budgetRemaining}`);
+        return false;
     }
 
     private getPathCells(start: GridPoint, end: GridPoint): { cells: GridPoint[]; orientation: 'ew' | 'ns' } {
