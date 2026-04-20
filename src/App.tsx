@@ -369,10 +369,10 @@ function App()
                     </div>
                 )}
             </div>
-            <PositionPanel
+            {/* <PositionPanel
                 mousePosition={mousePosition}
                 gridPosition={gridPosition}
-            />
+            /> */}
         </div>
     )
 }

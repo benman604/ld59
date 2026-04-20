@@ -1,6 +1,7 @@
 import { Car } from './Car';
 import { RoadNetwork } from './RoadNetwork';
 import { Block } from './Block';
+import { Road } from './Road';
 
 export class Navigator {
     private car: Car;
@@ -135,11 +136,9 @@ export class Navigator {
                     }
 
                     const nextX = x + step;
-                    if (step > 0 ? nextX > end : nextX < end) {
-                        continue;
-                    }
-
-                    const nextBlock = road.getBlockAt(nextX, road.fixedCoord);
+                    const nextBlock = (step > 0 ? nextX <= end : nextX >= end)
+                        ? road.getBlockAt(nextX, road.fixedCoord)
+                        : this.findCompatibleBlock(roadNetwork, road, nextX, road.fixedCoord);
                     if (!nextBlock) {
                         continue;
                     }
@@ -167,11 +166,9 @@ export class Navigator {
                     }
 
                     const nextY = y + step;
-                    if (step > 0 ? nextY > end : nextY < end) {
-                        continue;
-                    }
-
-                    const nextBlock = road.getBlockAt(road.fixedCoord, nextY);
+                    const nextBlock = (step > 0 ? nextY <= end : nextY >= end)
+                        ? road.getBlockAt(road.fixedCoord, nextY)
+                        : this.findCompatibleBlock(roadNetwork, road, road.fixedCoord, nextY);
                     if (!nextBlock) {
                         continue;
                     }
@@ -187,6 +184,34 @@ export class Navigator {
         }
 
         return graph;
+    }
+
+    private static findCompatibleBlock(
+        roadNetwork: RoadNetwork,
+        road: Road,
+        gridX: number,
+        gridY: number
+    ): Block | null {
+        for (const candidate of roadNetwork.getRoads()) {
+            if (candidate.orientation !== road.orientation) {
+                continue;
+            }
+
+            if (candidate.direction !== road.direction) {
+                continue;
+            }
+
+            if (candidate.fixedCoord !== road.fixedCoord) {
+                continue;
+            }
+
+            const block = candidate.getBlockAt(gridX, gridY);
+            if (block) {
+                return block;
+            }
+        }
+
+        return null;
     }
 
     private static cellKey(gridX: number, gridY: number): string {

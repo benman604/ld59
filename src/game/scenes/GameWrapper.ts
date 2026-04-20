@@ -659,8 +659,8 @@ export abstract class GameWrapper extends Scene
                 return;
             }
 
-            this.mergeRoadSpec(this.pendingSpec);
-            if (typeof this.pendingCost === 'number') {
+            const merged = this.mergeRoadSpec(this.pendingSpec);
+            if (merged && typeof this.pendingCost === 'number') {
                 this.spendBudget(this.pendingCost);
             }
             this.pendingSpec = null;
@@ -1118,26 +1118,122 @@ export abstract class GameWrapper extends Scene
         return spec.direction === 's' ? 'Southbound' : 'Northbound';
     }
 
-    private mergeRoadSpec(newSpec: RoadSpec): void {
-        const matches = this.getAllRoadSpecs().filter((spec) => this.canMergeRoadSpecs(spec, newSpec));
-        if (!matches.length) {
-            this.playerRoadSpecs.push(newSpec);
-            return;
-        }
+    private mergeRoadSpec(newSpec: RoadSpec): boolean {
+        const baseMatches = this.baseRoadSpecs.filter((spec) => {
+            if (spec.orientation !== newSpec.orientation) {
+                return false;
+            }
 
-        const baseMatches = this.baseRoadSpecs.filter((spec) => matches.includes(spec));
-        const playerMatches = this.playerRoadSpecs.filter((spec) => matches.includes(spec));
-        const primary = baseMatches[0] ?? playerMatches[0] ?? newSpec;
-        const merged = this.buildMergedSpec(primary, newSpec, matches);
+            if (spec.direction !== newSpec.direction) {
+                return false;
+            }
 
-        this.baseRoadSpecs = this.baseRoadSpecs.filter((spec) => !baseMatches.includes(spec));
-        this.playerRoadSpecs = this.playerRoadSpecs.filter((spec) => !playerMatches.includes(spec));
+            if (spec.orientation === 'ew') {
+                return (spec as EWRoadSpec).y === (newSpec as EWRoadSpec).y;
+            }
 
-        if (baseMatches.length > 0) {
-            this.baseRoadSpecs.push(merged);
-        } else {
+            return (spec as NSRoadSpec).x === (newSpec as NSRoadSpec).x;
+        });
+
+        if (!baseMatches.length) {
+            const matches = this.playerRoadSpecs.filter((spec) => this.canMergeRoadSpecs(spec, newSpec));
+            if (!matches.length) {
+                this.playerRoadSpecs.push(newSpec);
+                return true;
+            }
+
+            const primary = matches[0] ?? newSpec;
+            const merged = this.buildMergedSpec(primary, newSpec, matches);
+            this.playerRoadSpecs = this.playerRoadSpecs.filter((spec) => !matches.includes(spec));
             this.playerRoadSpecs.push(merged);
+            return true;
         }
+
+        const incomingRange = this.getRoadSpecRange(newSpec);
+        let segments: Array<{ min: number; max: number }> = [incomingRange];
+
+        for (const baseSpec of baseMatches) {
+            const baseRange = this.getRoadSpecRange(baseSpec);
+            const nextSegments: Array<{ min: number; max: number }> = [];
+
+            for (const segment of segments) {
+                if (segment.max < baseRange.min || segment.min > baseRange.max) {
+                    nextSegments.push(segment);
+                    continue;
+                }
+
+                const leftMax = baseRange.min - 1;
+                const rightMin = baseRange.max + 1;
+
+                if (segment.min <= leftMax) {
+                    nextSegments.push({ min: segment.min, max: leftMax });
+                }
+
+                if (segment.max >= rightMin) {
+                    nextSegments.push({ min: rightMin, max: segment.max });
+                }
+            }
+
+            segments = nextSegments;
+            if (!segments.length) {
+                break;
+            }
+        }
+
+        if (!segments.length) {
+            return false;
+        }
+
+        const directionLabel = this.getDirectionLabelFromSpec(newSpec);
+        let nextIndex = this.countDirectionRoads(directionLabel);
+        let mergedAny = false;
+
+        for (const segment of segments) {
+            nextIndex += 1;
+            const name = `${directionLabel} ${nextIndex}`;
+            let segmentSpec: RoadSpec;
+
+            if (newSpec.orientation === 'ew') {
+                const sourceEW = newSpec as EWRoadSpec;
+                const startX = newSpec.direction === 'e' ? segment.min : segment.max;
+                const endX = newSpec.direction === 'e' ? segment.max : segment.min;
+                segmentSpec = {
+                    name,
+                    orientation: 'ew',
+                    direction: newSpec.direction,
+                    startX,
+                    endX,
+                    y: sourceEW.y
+                };
+            } else {
+                const sourceNS = newSpec as NSRoadSpec;
+                const startY = newSpec.direction === 's' ? segment.min : segment.max;
+                const endY = newSpec.direction === 's' ? segment.max : segment.min;
+                segmentSpec = {
+                    name,
+                    orientation: 'ns',
+                    direction: newSpec.direction,
+                    startY,
+                    endY,
+                    x: sourceNS.x
+                };
+            }
+
+            const matches = this.playerRoadSpecs.filter((spec) => this.canMergeRoadSpecs(spec, segmentSpec));
+            if (!matches.length) {
+                this.playerRoadSpecs.push(segmentSpec);
+                mergedAny = true;
+                continue;
+            }
+
+            const primary = matches[0] ?? segmentSpec;
+            const merged = this.buildMergedSpec(primary, segmentSpec, matches);
+            this.playerRoadSpecs = this.playerRoadSpecs.filter((spec) => !matches.includes(spec));
+            this.playerRoadSpecs.push(merged);
+            mergedAny = true;
+        }
+
+        return mergedAny;
     }
 
     private canMergeRoadSpecs(existing: RoadSpec, incoming: RoadSpec): boolean {
