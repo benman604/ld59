@@ -22,6 +22,8 @@ function App()
     const [menuOpen, setMenuOpen] = useState(false);
     const [budgetRemaining, setBudgetRemaining] = useState<number | null>(null);
     const [budgetTotal, setBudgetTotal] = useState<number | null>(null);
+    const [musicVolume, setMusicVolume] = useState(0.35);
+    const [sfxVolume, setSfxVolume] = useState(0.6);
     const [notification, setNotification] = useState<string | null>(null);
     const notificationTimerRef = useRef<number | null>(null);
 
@@ -181,6 +183,19 @@ function App()
         };
     }, []);
 
+    useEffect(() => {
+        EventBus.emit('audio:music', { volume: musicVolume });
+        const scene = phaserRef.current?.scene;
+        const bgm = scene?.sound?.get('bgm');
+        if (bgm) {
+            bgm.setVolume(musicVolume);
+        }
+    }, [musicVolume]);
+
+    useEffect(() => {
+        EventBus.emit('audio:sfx', { volume: sfxVolume });
+    }, [sfxVolume]);
+
     // Event emitted from the PhaserGame component
     const currentScene = (scene: Phaser.Scene) => {
 
@@ -318,6 +333,29 @@ function App()
                                     >
                                         Resume
                                     </button>
+                                    <label className="ui-audio-slider">
+                                        <span>Music:</span>
+                                        <input
+                                            type="range"
+                                            min={0}
+                                            max={1}
+                                            step={0.01}
+                                            value={musicVolume}
+                                            onChange={(event) => setMusicVolume(Number(event.target.value))}
+                                        />
+                                    </label>
+                                    <label className="ui-audio-slider">
+                                        <span>SFX:</span>
+                                        <input
+                                            type="range"
+                                            min={0}
+                                            max={1}
+                                            step={0.01}
+                                            value={sfxVolume}
+                                            onChange={(event) => setSfxVolume(Number(event.target.value))}
+                                        />
+                                    </label>
+                                    
                                     <button
                                         className="button button--text"
                                         onClick={handleRestartClick}

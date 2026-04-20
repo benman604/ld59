@@ -146,3 +146,15 @@ body {
     font-size: 14px;
     line-height: 1.2;
 }
+
+.ui-audio-slider {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 10px;
+    margin: 4px 6px;
+}
+
+.ui-audio-slider input[type="range"] {
+    width: 120px;
+}

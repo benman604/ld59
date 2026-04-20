@@ -75,7 +75,7 @@ export abstract class GameWrapper extends Scene
     private completionTriggered = false;
 
     private buildMode = false;
-    private buildState: 'idle' | 'started' | 'confirm' = 'idle';
+    private buildState: 'idle' | 'started' | 'confirm' | 'confirming' = 'idle';
     private roadStart: GridPoint | null = null;
     private previewEnd: GridPoint | null = null;
     private previewSprites: Phaser.GameObjects.Image[] = [];
@@ -91,6 +91,8 @@ export abstract class GameWrapper extends Scene
     private simulationToken = 0;
     private budgetTotal: number | null = null;
     private budgetRemaining: number | null = null;
+    private musicVolume = 0.35;
+    private sfxVolume = 0.6;
     private modeHint: Phaser.GameObjects.Text | null = null;
     private clickStart: { x: number; y: number } | null = null;
     private selectedRoad: RoadInstance | null = null;
@@ -201,6 +203,7 @@ export abstract class GameWrapper extends Scene
 
         this.roadNetwork = this.buildRoadNetwork();
         this.setupLevel();
+        this.bindAudioEvents();
 
         this.camera.centerOn(400, 120);
         this.setupInput();
@@ -327,6 +330,7 @@ export abstract class GameWrapper extends Scene
     }
 
     protected onCarFinished(_car: Car): void {
+        this.sound.play('sfx-horn', { volume: this.sfxVolume });
     }
 
     protected isSpawnBlocked(road: Road, sourceBlock: Block): boolean {
@@ -517,6 +521,8 @@ export abstract class GameWrapper extends Scene
     private triggerCrash(x: number, y: number): void {
         EventBus.emit('simulation:lock', { locked: true });
         this.crashTriggered = true;
+        this.sound.play('sfx-crash', { volume: this.sfxVolume });
+        this.sound.play('sfx-crash', { volume: 0.7 });
 
         this.camera.pan(x, y, 200, 'Sine.easeInOut');
         this.camera.zoomTo(2.2, 200, 'Sine.easeInOut');
@@ -655,21 +661,15 @@ export abstract class GameWrapper extends Scene
                 return;
             }
 
+            if (this.buildState === 'confirming') {
+                return;
+            }
+
             if (!this.canAffordPendingBuild()) {
                 return;
             }
 
-            const merged = this.mergeRoadSpec(this.pendingSpec);
-            if (merged && typeof this.pendingCost === 'number') {
-                this.spendBudget(this.pendingCost);
-            }
-            this.pendingSpec = null;
-            this.pendingCost = null;
-            this.roadNetwork.build(this.getAllRoadSpecs());
-            this.rebuildRoutes();
-            this.clearPreview();
-            this.resetBuildState();
-            EventBus.emit('builder:clear');
+            this.startBuildConfirmation();
         };
 
         const handleCancel = () => {
@@ -855,7 +855,7 @@ export abstract class GameWrapper extends Scene
             sprite.setDepth(Layers.Roads + 5 + (sprite.y / 1000));
             this.previewSprites.push(sprite);
 
-            if (i % 4 === 0) {
+            if (i % 4 === 0 || i === path.cells.length - 1) {
                 const arrow = this.add.image(x, y, arrowKey);
                 arrow.setAlpha(0.7);
                 arrow.setScale(0.8);
@@ -931,6 +931,9 @@ export abstract class GameWrapper extends Scene
     }
 
     private cancelBuild(): void {
+        if (this.buildState === 'confirming') {
+            return;
+        }
         this.clearIdleIndicator();
         this.clearPreview();
         this.resetBuildState();
@@ -942,6 +945,75 @@ export abstract class GameWrapper extends Scene
         this.pendingSpec = null;
         this.pendingCost = null;
         this.buildState = 'idle';
+    }
+
+    private bindAudioEvents(): void {
+        const setMusicVolume = (volume: number) => {
+            this.musicVolume = Math.min(1, Math.max(0, volume));
+            const bgm = this.sound.get('bgm');
+            if (bgm) {
+                bgm.setVolume(this.musicVolume);
+            }
+        };
+
+        const setSfxVolume = (volume: number) => {
+            this.sfxVolume = Math.min(1, Math.max(0, volume));
+        };
+
+        const handleMusic = (payload: { volume: number }) => setMusicVolume(payload.volume);
+        const handleSfx = (payload: { volume: number }) => setSfxVolume(payload.volume);
+
+        EventBus.on('audio:music', handleMusic);
+        EventBus.on('audio:sfx', handleSfx);
+
+        setMusicVolume(this.musicVolume);
+
+        this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+            EventBus.removeListener('audio:music', handleMusic);
+            EventBus.removeListener('audio:sfx', handleSfx);
+        });
+    }
+
+    private startBuildConfirmation(): void {
+        if (!this.pendingSpec) {
+            return;
+        }
+
+        this.sound.play('sfx-lego', { volume: this.sfxVolume });
+        this.buildState = 'confirming';
+
+        const sprites = [...this.previewSprites];
+        const totalMs = 1000;
+        const stepMs = sprites.length > 0 ? totalMs / sprites.length : totalMs;
+
+        for (let i = 0; i < sprites.length; i += 1) {
+            const sprite = sprites[i];
+            sprite.setAlpha(0.1);
+            this.time.delayedCall(stepMs * (i + 1), () => {
+                if (!sprite.scene) {
+                    return;
+                }
+                sprite.setAlpha(0.65);
+            });
+        }
+
+        this.time.delayedCall(totalMs, () => {
+            if (this.buildState !== 'confirming') {
+                return;
+            }
+
+            const merged = this.mergeRoadSpec(this.pendingSpec!);
+            if (merged && typeof this.pendingCost === 'number') {
+                this.spendBudget(this.pendingCost);
+            }
+            this.pendingSpec = null;
+            this.pendingCost = null;
+            this.roadNetwork.build(this.getAllRoadSpecs());
+            this.rebuildRoutes();
+            this.clearPreview();
+            this.resetBuildState();
+            EventBus.emit('builder:clear');
+        });
     }
 
     private getArrowTextureKey(orientation: 'ew' | 'ns', start: GridPoint, end: GridPoint): string {

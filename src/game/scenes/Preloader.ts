@@ -34,10 +34,21 @@ export class Preloader extends Scene
 
         this.load.image('logo', 'logo.png');
         this.load.image('star', 'star.png');
+        this.load.audio('bgm', 'audio/boredom.wav');
+        this.load.audio('sfx-lego', 'audio/lego.mp3');
+        this.load.audio('sfx-horn', 'audio/horn.mp3');
+        this.load.audio('sfx-crash', 'audio/carcrash.mp3');
     }
 
     create ()
     {
+        const existing = this.sound.get('bgm');
+        if (!existing) {
+            this.sound.add('bgm', { loop: true, volume: 0.35 }).play();
+        } else if (!existing.isPlaying) {
+            existing.play();
+        }
+
         //  When all the assets have loaded, it's often worth creating global objects here that the rest of the game can use.
         //  For example, you can define global animations here, so we can use them in other scenes.
 

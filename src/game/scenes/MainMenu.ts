@@ -35,7 +35,7 @@ export class MainMenu extends GameWrapper
     
     changeScene ()
     {
-        this.scene.start('LevelBuilder3');
+        this.scene.start('LevelBuilder1');
     }
 
     protected buildRoadNetwork(): RoadNetwork {
@@ -166,7 +166,7 @@ export class MainMenu extends GameWrapper
             this.creditsText = this.add.text(
                 anchor.x,
                 anchor.y,
-                'Made by Benjamin Man in 72 hours for Ludum Dare 59.\n\nReference graphics credits 123RF, Alamy, Freepik\nFont from DaFont\n\nBuilt with Phaser 3',
+                'Made by Benjamin Man in 72 hours for Ludum Dare 59.\n\nMusic by Benjamin Man\nSound effects by Universfield, Lego\nFont from DaFont\n\nBuilt with Phaser 3',
                 {
                     fontFamily: 'Pixeled',
                     fontSize: '15px',
