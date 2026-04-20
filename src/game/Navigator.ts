@@ -1,7 +1,6 @@
 import { Car } from './Car';
 import { RoadNetwork } from './RoadNetwork';
 import { Block } from './Block';
-import { Road } from './Road';
 
 export class Navigator {
     private car: Car;
@@ -19,7 +18,7 @@ export class Navigator {
     }
 
     static canReach(roadNetwork: RoadNetwork, source: Block, destination: Block): boolean {
-        const graph = Navigator.buildDirectedGraph(roadNetwork);
+        const graph = roadNetwork.getDirectedGraph();
         const startKey = Navigator.cellKey(source.gridX, source.gridY);
         const endKey = Navigator.cellKey(destination.gridX, destination.gridY);
 
@@ -58,7 +57,7 @@ export class Navigator {
     }
 
     private findRoute(source: { gridX: number; gridY: number }, destination: { gridX: number; gridY: number }): Block[] {
-        const graph = Navigator.buildDirectedGraph(this.roadNetwork);
+        const graph = this.roadNetwork.getDirectedGraph();
         const startKey = Navigator.cellKey(source.gridX, source.gridY);
         const endKey = Navigator.cellKey(destination.gridX, destination.gridY);
 
@@ -110,108 +109,6 @@ export class Navigator {
         }
 
         return blocks;
-    }
-
-    private static buildDirectedGraph(roadNetwork: RoadNetwork): Map<string, string[]> {
-        const graph = new Map<string, string[]>();
-
-        for (const road of roadNetwork.getRoads()) {
-            const step = road.orientation === 'ew'
-                ? (road.direction === 'we' ? -1 : 1)
-                : (road.direction === 'sn' ? -1 : 1);
-
-            if (road.orientation === 'ew') {
-                const start = step > 0 ? road.minIndex : road.maxIndex;
-                const end = step > 0 ? road.maxIndex : road.minIndex;
-
-                for (let x = start; step > 0 ? x <= end : x >= end; x += step) {
-                    const block = road.getBlockAt(x, road.fixedCoord);
-                    if (!block) {
-                        continue;
-                    }
-
-                    const currentKey = this.cellKey(block.gridX, block.gridY);
-                    if (!graph.has(currentKey)) {
-                        graph.set(currentKey, []);
-                    }
-
-                    const nextX = x + step;
-                    const nextBlock = (step > 0 ? nextX <= end : nextX >= end)
-                        ? road.getBlockAt(nextX, road.fixedCoord)
-                        : this.findCompatibleBlock(roadNetwork, road, nextX, road.fixedCoord);
-                    if (!nextBlock) {
-                        continue;
-                    }
-
-                    const nextKey = this.cellKey(nextBlock.gridX, nextBlock.gridY);
-                    graph.get(currentKey)!.push(nextKey);
-
-                    if (!graph.has(nextKey)) {
-                        graph.set(nextKey, []);
-                    }
-                }
-            } else {
-                const start = step > 0 ? road.minIndex : road.maxIndex;
-                const end = step > 0 ? road.maxIndex : road.minIndex;
-
-                for (let y = start; step > 0 ? y <= end : y >= end; y += step) {
-                    const block = road.getBlockAt(road.fixedCoord, y);
-                    if (!block) {
-                        continue;
-                    }
-
-                    const currentKey = this.cellKey(block.gridX, block.gridY);
-                    if (!graph.has(currentKey)) {
-                        graph.set(currentKey, []);
-                    }
-
-                    const nextY = y + step;
-                    const nextBlock = (step > 0 ? nextY <= end : nextY >= end)
-                        ? road.getBlockAt(road.fixedCoord, nextY)
-                        : this.findCompatibleBlock(roadNetwork, road, road.fixedCoord, nextY);
-                    if (!nextBlock) {
-                        continue;
-                    }
-
-                    const nextKey = this.cellKey(nextBlock.gridX, nextBlock.gridY);
-                    graph.get(currentKey)!.push(nextKey);
-
-                    if (!graph.has(nextKey)) {
-                        graph.set(nextKey, []);
-                    }
-                }
-            }
-        }
-
-        return graph;
-    }
-
-    private static findCompatibleBlock(
-        roadNetwork: RoadNetwork,
-        road: Road,
-        gridX: number,
-        gridY: number
-    ): Block | null {
-        for (const candidate of roadNetwork.getRoads()) {
-            if (candidate.orientation !== road.orientation) {
-                continue;
-            }
-
-            if (candidate.direction !== road.direction) {
-                continue;
-            }
-
-            if (candidate.fixedCoord !== road.fixedCoord) {
-                continue;
-            }
-
-            const block = candidate.getBlockAt(gridX, gridY);
-            if (block) {
-                return block;
-            }
-        }
-
-        return null;
     }
 
     private static cellKey(gridX: number, gridY: number): string {

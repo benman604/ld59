@@ -28,6 +28,7 @@ export class RoadNetwork {
     private roadsByName: Map<string, Road> = new Map();
     private occupiedCells: Set<string> = new Set();
     private occupancyIndicators: Map<string, Phaser.GameObjects.Arc> = new Map();
+    private directedGraph: Map<string, string[]> | null = null;
 
     constructor(scene: Phaser.Scene, originX: number, originY: number) {
         this.scene = scene;
@@ -49,10 +50,19 @@ export class RoadNetwork {
         this.linkNeighborBlocks();
         this.placeRoadArrows();
         this.configureTrafficLights();
+        this.directedGraph = this.buildDirectedGraph();
     }
 
     getRoads(): Road[] {
         return [...this.roads];
+    }
+
+    getDirectedGraph(): Map<string, string[]> {
+        if (!this.directedGraph) {
+            this.directedGraph = this.buildDirectedGraph();
+        }
+
+        return this.directedGraph;
     }
 
     getRoadByName(name: string): Road | undefined {
@@ -219,6 +229,7 @@ export class RoadNetwork {
         this.intersections = [];
         this.grid.clear();
         this.roadsByName.clear();
+        this.directedGraph = null;
     }
 
     private createRoad(spec: RoadSpec): Road {
@@ -439,5 +450,102 @@ export class RoadNetwork {
             default:
                 return 'arrow_e';
         }
+    }
+
+    private buildDirectedGraph(): Map<string, string[]> {
+        const graph = new Map<string, string[]>();
+
+        for (const road of this.roads) {
+            const step = road.orientation === 'ew'
+                ? (road.direction === 'we' ? -1 : 1)
+                : (road.direction === 'sn' ? -1 : 1);
+
+            if (road.orientation === 'ew') {
+                const start = step > 0 ? road.minIndex : road.maxIndex;
+                const end = step > 0 ? road.maxIndex : road.minIndex;
+
+                for (let x = start; step > 0 ? x <= end : x >= end; x += step) {
+                    const block = road.getBlockAt(x, road.fixedCoord);
+                    if (!block) {
+                        continue;
+                    }
+
+                    const currentKey = this.cellKey(block.gridX, block.gridY);
+                    if (!graph.has(currentKey)) {
+                        graph.set(currentKey, []);
+                    }
+
+                    const nextX = x + step;
+                    const nextBlock = (step > 0 ? nextX <= end : nextX >= end)
+                        ? road.getBlockAt(nextX, road.fixedCoord)
+                        : this.findCompatibleBlock(road, nextX, road.fixedCoord);
+                    if (!nextBlock) {
+                        continue;
+                    }
+
+                    const nextKey = this.cellKey(nextBlock.gridX, nextBlock.gridY);
+                    graph.get(currentKey)!.push(nextKey);
+
+                    if (!graph.has(nextKey)) {
+                        graph.set(nextKey, []);
+                    }
+                }
+            } else {
+                const start = step > 0 ? road.minIndex : road.maxIndex;
+                const end = step > 0 ? road.maxIndex : road.minIndex;
+
+                for (let y = start; step > 0 ? y <= end : y >= end; y += step) {
+                    const block = road.getBlockAt(road.fixedCoord, y);
+                    if (!block) {
+                        continue;
+                    }
+
+                    const currentKey = this.cellKey(block.gridX, block.gridY);
+                    if (!graph.has(currentKey)) {
+                        graph.set(currentKey, []);
+                    }
+
+                    const nextY = y + step;
+                    const nextBlock = (step > 0 ? nextY <= end : nextY >= end)
+                        ? road.getBlockAt(road.fixedCoord, nextY)
+                        : this.findCompatibleBlock(road, road.fixedCoord, nextY);
+                    if (!nextBlock) {
+                        continue;
+                    }
+
+                    const nextKey = this.cellKey(nextBlock.gridX, nextBlock.gridY);
+                    graph.get(currentKey)!.push(nextKey);
+
+                    if (!graph.has(nextKey)) {
+                        graph.set(nextKey, []);
+                    }
+                }
+            }
+        }
+
+        return graph;
+    }
+
+    private findCompatibleBlock(road: Road, gridX: number, gridY: number): Block | null {
+        for (const candidate of this.roads) {
+            if (candidate.orientation !== road.orientation) {
+                continue;
+            }
+
+            if (candidate.direction !== road.direction) {
+                continue;
+            }
+
+            if (candidate.fixedCoord !== road.fixedCoord) {
+                continue;
+            }
+
+            const block = candidate.getBlockAt(gridX, gridY);
+            if (block) {
+                return block;
+            }
+        }
+
+        return null;
     }
 }
