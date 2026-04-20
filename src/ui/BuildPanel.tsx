@@ -4,6 +4,7 @@ type BuildPanelProps = {
     isBuilderScene: boolean;
     buildMode: boolean;
     buildSummary: BuildSummary | null;
+    disabled: boolean;
     onToggleBuildMode: () => void;
     onConfirmBuild: () => void;
     onCancelBuild: () => void;
@@ -13,6 +14,7 @@ export function BuildPanel({
     isBuilderScene,
     buildMode,
     buildSummary,
+    disabled,
     onToggleBuildMode,
     onConfirmBuild,
     onCancelBuild
@@ -22,7 +24,7 @@ export function BuildPanel({
             <div>
                 <button
                     className="button button--text"
-                    disabled={!isBuilderScene}
+                    disabled={!isBuilderScene || disabled}
                     onClick={onToggleBuildMode}
                     aria-label={buildMode ? 'Switch to navigation mode' : 'Switch to build mode'}
                     title={buildMode ? 'Switch to navigation mode' : 'Switch to build mode'}
@@ -42,6 +44,7 @@ export function BuildPanel({
                         <button
                             className="button button--text"
                             onClick={onConfirmBuild}
+                            disabled={disabled}
                             aria-label="Confirm build"
                             title="Confirm build"
                         >
@@ -50,6 +53,7 @@ export function BuildPanel({
                         <button
                             className="button button--text"
                             onClick={onCancelBuild}
+                            disabled={disabled}
                             aria-label="Cancel build"
                             title="Cancel build"
                         >

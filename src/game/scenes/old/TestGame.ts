@@ -1,9 +1,9 @@
-import { RoadNetwork } from '../RoadNetwork';
-import { Road } from '../Road';
-import { Block } from '../Block';
-import { GameWrapper } from './GameWrapper';
-import { Route } from '../Route';
-import { Layers } from '../../types';
+import { RoadNetwork } from '../../RoadNetwork';
+import { Road } from '../../Road';
+import { Block } from '../../Block';
+import { GameWrapper } from '../GameWrapper';
+import { Route } from '../../Route';
+import { Layers } from '../../../types';
 
 export class TestGame extends GameWrapper
 {

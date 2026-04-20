@@ -40,6 +40,36 @@ body {
     z-index: 10;
 }
 
+.ui-overlay-left {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+    z-index: 10;
+}
+
+.ui-notification {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 12;
+    pointer-events: none;
+}
+
+.ui-notification__chip {
+    background-color: rgba(15, 15, 15, 0.85);
+    border: 2px solid rgba(255, 255, 255, 0.7);
+    color: rgba(255, 255, 255, 0.95);
+    padding: 8px 14px;
+    font-size: 14px;
+    line-height: 1.2;
+    text-align: center;
+}
+
 .spritePosition {
     margin: 10px 0 0 10px;
     font-size: 0.8em;

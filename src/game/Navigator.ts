@@ -17,6 +17,37 @@ export class Navigator {
         this.computeRoute();
     }
 
+    static canReach(roadNetwork: RoadNetwork, source: Block, destination: Block): boolean {
+        const graph = Navigator.buildDirectedGraph(roadNetwork);
+        const startKey = Navigator.cellKey(source.gridX, source.gridY);
+        const endKey = Navigator.cellKey(destination.gridX, destination.gridY);
+
+        if (!graph.has(startKey) || !graph.has(endKey)) {
+            return false;
+        }
+
+        const queue: string[] = [startKey];
+        const visited = new Set<string>([startKey]);
+
+        while (queue.length > 0) {
+            const current = queue.shift()!;
+            if (current === endKey) {
+                return true;
+            }
+
+            const neighbors = graph.get(current) ?? [];
+            for (const next of neighbors) {
+                if (visited.has(next)) {
+                    continue;
+                }
+                visited.add(next);
+                queue.push(next);
+            }
+        }
+
+        return false;
+    }
+
     computeRoute(): void {
         const blocks = this.findRoute(
             { gridX: this.source.gridX, gridY: this.source.gridY },
@@ -26,9 +57,9 @@ export class Navigator {
     }
 
     private findRoute(source: { gridX: number; gridY: number }, destination: { gridX: number; gridY: number }): Block[] {
-        const graph = this.buildDirectedGraph();
-        const startKey = this.cellKey(source.gridX, source.gridY);
-        const endKey = this.cellKey(destination.gridX, destination.gridY);
+        const graph = Navigator.buildDirectedGraph(this.roadNetwork);
+        const startKey = Navigator.cellKey(source.gridX, source.gridY);
+        const endKey = Navigator.cellKey(destination.gridX, destination.gridY);
 
         if (!graph.has(startKey) || !graph.has(endKey)) {
             throw new Error('Source or destination is not on a road within this network.');
@@ -70,7 +101,7 @@ export class Navigator {
 
         const blocks: Block[] = [];
         for (const key of pathKeys) {
-            const [x, y] = this.parseCellKey(key);
+            const [x, y] = Navigator.parseCellKey(key);
             const block = this.roadNetwork.getBlockAt(x, y);
             if (block) {
                 blocks.push(block);
@@ -80,10 +111,10 @@ export class Navigator {
         return blocks;
     }
 
-    private buildDirectedGraph(): Map<string, string[]> {
+    private static buildDirectedGraph(roadNetwork: RoadNetwork): Map<string, string[]> {
         const graph = new Map<string, string[]>();
 
-        for (const road of this.roadNetwork.getRoads()) {
+        for (const road of roadNetwork.getRoads()) {
             const step = road.orientation === 'ew'
                 ? (road.direction === 'we' ? -1 : 1)
                 : (road.direction === 'sn' ? -1 : 1);
@@ -158,11 +189,11 @@ export class Navigator {
         return graph;
     }
 
-    private cellKey(gridX: number, gridY: number): string {
+    private static cellKey(gridX: number, gridY: number): string {
         return `${gridX},${gridY}`;
     }
 
-    private parseCellKey(key: string): [number, number] {
+    private static parseCellKey(key: string): [number, number] {
         const [x, y] = key.split(',').map(Number);
         return [x, y];
     }

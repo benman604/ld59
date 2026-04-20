@@ -3,10 +3,34 @@ import { RoadNetwork } from '../RoadNetwork';
 import { Scene } from 'phaser';
 import { Car } from '../Car';
 import { Navigator } from '../Navigator';
-import { Road } from '../Road';
+import { EWRoadSpec, NSRoadSpec, Road, RoadSpec } from '../Road';
 import { Block } from '../Block';
 import { Layers } from '../../types';
 import { Route } from '../Route';
+import { Intersection } from '../Intersection';
+
+const COST_PER_BLOCK = 25;
+const COST_PER_INTERSECTION = 100;
+
+export type GridPoint = {
+    gridX: number;
+    gridY: number;
+};
+
+type BuildSummary = {
+    name: string;
+    length: number;
+    intersections: number;
+    cost: number;
+    blockCost: number;
+    intersectionCost: number;
+};
+
+type RoadSummary = BuildSummary & {
+    name: string;
+};
+
+type RoadInstance = ReturnType<RoadNetwork['getRoads']>[number];
 
 export abstract class GameWrapper extends Scene
 {
@@ -19,6 +43,26 @@ export abstract class GameWrapper extends Scene
     private crashTriggered = false;
     private failureUi: Phaser.GameObjects.Container | null = null;
 
+    private buildMode = false;
+    private buildState: 'idle' | 'started' | 'confirm' = 'idle';
+    private roadStart: GridPoint | null = null;
+    private previewEnd: GridPoint | null = null;
+    private previewSprites: Phaser.GameObjects.Image[] = [];
+    private previewArrows: Phaser.GameObjects.Image[] = [];
+    private idleIndicator: Phaser.GameObjects.Image | null = null;
+    private pendingSpec: RoadSpec | null = null;
+    private baseRoadSpecs: RoadSpec[] = [];
+    private playerRoadSpecs: RoadSpec[] = [];
+    private builderRoutes: Route[] = [];
+    private simulationRunning = false;
+    private simulationToken = 0;
+    private modeHint: Phaser.GameObjects.Text | null = null;
+    private clickStart: { x: number; y: number } | null = null;
+    private selectedRoad: RoadInstance | null = null;
+    private selectionSprites: Phaser.GameObjects.Image[] = [];
+
+    private static readonly SELECTION_TEXTURE_KEY = 'road-selection-iso';
+
     constructor (key: string)
     {
         super(key);
@@ -30,6 +74,30 @@ export abstract class GameWrapper extends Scene
         this.failureUi = null;
         this.cars = [];
         this.navigators = [];
+
+        this.buildMode = false;
+        this.buildState = 'idle';
+        this.roadStart = null;
+        this.previewEnd = null;
+        this.previewSprites = [];
+        this.previewArrows = [];
+        this.idleIndicator = null;
+        this.pendingSpec = null;
+        this.baseRoadSpecs = this.isBuilderEnabled() ? this.getInitialRoadSpecs() : [];
+        this.playerRoadSpecs = [];
+        this.builderRoutes = [];
+        this.simulationRunning = false;
+        this.simulationToken = 0;
+        this.modeHint = null;
+        this.clickStart = null;
+        this.selectedRoad = null;
+        this.selectionSprites = [];
+
+        if (this.isBuilderEnabled()) {
+            EventBus.emit('builder:clear');
+            EventBus.emit('road:clear');
+            EventBus.emit('simulation:stopped');
+        }
     }
 
     create ()
@@ -82,12 +150,56 @@ export abstract class GameWrapper extends Scene
         this.camera.centerOn(400, 120);
         this.setupInput();
 
+        if (this.isBuilderEnabled()) {
+            this.rebuildRoutes();
+            this.setupBuilderInput();
+            this.bindBuilderEvents();
+        }
+
         EventBus.emit('current-scene-ready', this);
     }
 
     protected abstract buildRoadNetwork(): RoadNetwork;
 
     protected abstract setupLevel(): void;
+
+    protected isBuilderEnabled(): boolean {
+        return false;
+    }
+
+    protected getInitialRoadSpecs(): RoadSpec[] {
+        return [];
+    }
+
+    protected getRoutes(): Route[] {
+        return [];
+    }
+
+    protected createRouteFromGrid(source: GridPoint, destination: GridPoint): Route | null {
+        const sourceBlock = this.roadNetwork.getBlockAt(source.gridX, source.gridY);
+        const destinationBlock = this.roadNetwork.getBlockAt(destination.gridX, destination.gridY);
+        if (!sourceBlock || !destinationBlock) {
+            return null;
+        }
+
+        const sourceRoad = this.findRoadAt(source, true);
+        if (!sourceRoad) {
+            return null;
+        }
+
+        return new Route(this, this.roadNetwork, sourceRoad, sourceBlock, destinationBlock);
+    }
+
+    protected getRoadNetworkOrigin(): { x: number; y: number } {
+        return { x: 400, y: 120 };
+    }
+
+    protected buildRoadNetworkFromSpecs(): RoadNetwork {
+        const origin = this.getRoadNetworkOrigin();
+        const roadNetwork = new RoadNetwork(this, origin.x, origin.y);
+        roadNetwork.build(this.getAllRoadSpecs());
+        return roadNetwork;
+    }
 
     protected startSpawning(routeGroups: Route[][], minDelayMs: number, maxDelayMs: number, speed: number): void {
         const scheduleSpawn = () => {
@@ -220,6 +332,7 @@ export abstract class GameWrapper extends Scene
     }
 
     private triggerCrash(x: number, y: number): void {
+        EventBus.emit('simulation:lock', { locked: true });
         this.crashTriggered = true;
 
         this.camera.pan(x, y, 200, 'Sine.easeInOut');
@@ -262,13 +375,13 @@ export abstract class GameWrapper extends Scene
             .setDepth(Layers.UI + 10);
 
         const title = this.add.text(0, -50, 'Level Failed', {
-            fontFamily: 'Georgia',
+            fontFamily: 'Pixeled',
             fontSize: '28px',
             color: '#ffffff'
         }).setOrigin(0.5).setScrollFactor(0).setDepth(Layers.UI + 11);
 
         const buttonText = this.add.text(0, 40, 'Restart', {
-            fontFamily: 'Georgia',
+            fontFamily: 'Pixeled',
             fontSize: '22px',
             color: '#ffffff'
         }).setOrigin(0.5).setScrollFactor(0).setDepth(Layers.UI + 12);
@@ -300,6 +413,7 @@ export abstract class GameWrapper extends Scene
     }
 
     private restartScene(): void {
+        this.stopSimulation();
         this.crashTriggered = false;
         if (this.failureUi) {
             this.failureUi.destroy(true);
@@ -318,6 +432,672 @@ export abstract class GameWrapper extends Scene
         const scale = cam.zoom === 0 ? 1 : (1 / cam.zoom);
         this.failureUi.setPosition(this.scale.width / 2, this.scale.height / 2);
         this.failureUi.setScale(scale);
+    }
+
+    private bindBuilderEvents(): void {
+        const modeHint = this.modeHint;
+        const handleMode = (payload: { enabled: boolean }) => {
+            if (payload.enabled && this.simulationRunning) {
+                this.buildMode = false;
+                modeHint?.setText('Build Mode: off');
+                this.cancelBuild();
+                EventBus.emit('builder:clear');
+                return;
+            }
+            this.buildMode = payload.enabled;
+            modeHint?.setText(`Build Mode: ${payload.enabled ? 'on' : 'off'}`);
+            if (!this.buildMode) {
+                this.cancelBuild();
+            }
+        };
+
+        const handleConfirm = () => {
+            if (!this.pendingSpec) {
+                return;
+            }
+
+            this.mergeRoadSpec(this.pendingSpec);
+            this.pendingSpec = null;
+            this.roadNetwork.build(this.getAllRoadSpecs());
+            this.rebuildRoutes();
+            this.clearPreview();
+            this.resetBuildState();
+            EventBus.emit('builder:clear');
+        };
+
+        const handleCancel = () => {
+            this.cancelBuild();
+            EventBus.emit('builder:clear');
+        };
+
+        const handleDelete = (payload: { name: string }) => {
+            if (this.isBaseRoad(payload.name)) {
+                this.clearSelectedRoad();
+                EventBus.emit('road:clear');
+                return;
+            }
+
+            this.playerRoadSpecs = this.playerRoadSpecs.filter((spec) => spec.name !== payload.name);
+            this.roadNetwork.build(this.getAllRoadSpecs());
+            this.rebuildRoutes();
+            this.clearSelectedRoad();
+            EventBus.emit('road:clear');
+        };
+
+        const handleSimulationStart = () => {
+            this.startSimulation();
+        };
+
+        const handleSimulationStop = () => {
+            this.stopSimulation();
+        };
+
+        EventBus.on('builder:mode', handleMode);
+        EventBus.on('builder:confirm', handleConfirm);
+        EventBus.on('builder:cancel', handleCancel);
+        EventBus.on('road:delete', handleDelete);
+        EventBus.on('simulation:start', handleSimulationStart);
+        EventBus.on('simulation:stop', handleSimulationStop);
+
+        this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+            EventBus.removeListener('builder:mode', handleMode);
+            EventBus.removeListener('builder:confirm', handleConfirm);
+            EventBus.removeListener('builder:cancel', handleCancel);
+            EventBus.removeListener('road:delete', handleDelete);
+            EventBus.removeListener('simulation:start', handleSimulationStart);
+            EventBus.removeListener('simulation:stop', handleSimulationStop);
+        });
+    }
+
+    private setupBuilderInput(): void {
+        this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+            this.clickStart = { x: pointer.x, y: pointer.y };
+            if (!this.buildMode || !pointer.leftButtonDown()) {
+                return;
+            }
+
+            const grid = this.getGridFromPointer(pointer);
+            if (!grid) {
+                return;
+            }
+
+            if (this.buildState === 'idle') {
+                this.roadStart = grid;
+                this.previewEnd = grid;
+                this.buildState = 'started';
+                this.updatePreview(grid);
+                return;
+            }
+
+            if (this.buildState === 'started' && this.roadStart) {
+                this.previewEnd = this.getAxisEnd(this.roadStart, grid);
+                this.updatePreview(this.previewEnd);
+                this.finishBuildAttempt();
+            }
+        });
+
+        this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+            const grid = this.getGridFromPointer(pointer);
+            if (!grid) {
+                return;
+            }
+
+            if (!this.buildMode) {
+                return;
+            }
+
+            if (this.buildState === 'idle') {
+                this.updateIdleIndicator(grid);
+                return;
+            }
+
+            if (this.buildState !== 'started' || !this.roadStart) {
+                return;
+            }
+
+            this.previewEnd = this.getAxisEnd(this.roadStart, grid);
+            this.updatePreview(this.previewEnd);
+        });
+
+        this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+            if (this.buildMode || !this.clickStart || pointer.button !== 0) {
+                this.clickStart = null;
+                return;
+            }
+
+            const dragDistance = Phaser.Math.Distance.Between(
+                this.clickStart.x,
+                this.clickStart.y,
+                pointer.x,
+                pointer.y
+            );
+            this.clickStart = null;
+
+            if (dragDistance > 6) {
+                return;
+            }
+
+            if (this.isTrafficLightClick(pointer)) {
+                return;
+            }
+
+            this.inspectRoadAtPointer(pointer);
+        });
+    }
+
+    private getGridFromPointer(pointer: Phaser.Input.Pointer): GridPoint | null {
+        if (!this.roadNetwork) {
+            return null;
+        }
+
+        const grid = this.roadNetwork.getGridFromIso(pointer.worldX ?? pointer.x, pointer.worldY ?? pointer.y);
+        return { gridX: grid.gridX, gridY: grid.gridY };
+    }
+
+    private getAxisEnd(start: GridPoint, current: GridPoint): GridPoint {
+        const dx = current.gridX - start.gridX;
+        const dy = current.gridY - start.gridY;
+
+        if (Math.abs(dx) >= Math.abs(dy)) {
+            return { gridX: current.gridX, gridY: start.gridY };
+        }
+
+        return { gridX: start.gridX, gridY: current.gridY };
+    }
+
+    private updatePreview(end: GridPoint): void {
+        if (!this.roadStart) {
+            return;
+        }
+
+        this.clearIdleIndicator();
+        this.clearPreview();
+        const path = this.getPathCells(this.roadStart, end);
+        const textureKey = path.orientation === 'ew' ? 'roadblock-iso' : 'roadblock-iso-nesw';
+        const arrowKey = this.getArrowTextureKey(path.orientation, this.roadStart, end);
+
+        for (let i = 0; i < path.cells.length; i += 1) {
+            const cell = path.cells[i];
+            const { x, y } = this.roadNetwork.getWorldFromGrid(cell.gridX, cell.gridY);
+            const sprite = this.add.image(x, y, textureKey);
+            sprite.setAlpha(0.65);
+            sprite.setDepth(Layers.Roads + 5 + (sprite.y / 1000));
+            this.previewSprites.push(sprite);
+
+            if (i % 4 === 0) {
+                const arrow = this.add.image(x, y, arrowKey);
+                arrow.setAlpha(0.7);
+                arrow.setScale(0.8);
+                arrow.setDepth(Layers.Roads + 6 + (arrow.y / 1000));
+                this.previewArrows.push(arrow);
+            }
+        }
+    }
+
+    private updateIdleIndicator(cell: GridPoint): void {
+        const { x, y } = this.roadNetwork.getWorldFromGrid(cell.gridX, cell.gridY);
+        if (!this.idleIndicator) {
+            this.idleIndicator = this.add.image(x, y, 'roadblock-iso');
+            this.idleIndicator.setAlpha(0.55);
+            this.idleIndicator.setDepth(Layers.Roads + 99 + (y / 1000));
+            return;
+        }
+
+        this.idleIndicator.setPosition(x, y);
+        this.idleIndicator.setDepth(Layers.Roads + 99 + (y / 1000));
+    }
+
+    private clearPreview(): void {
+        this.previewSprites.forEach(sprite => sprite.destroy());
+        this.previewSprites = [];
+        this.previewArrows.forEach(sprite => sprite.destroy());
+        this.previewArrows = [];
+    }
+
+    private clearIdleIndicator(): void {
+        if (!this.idleIndicator) {
+            return;
+        }
+
+        this.idleIndicator.destroy();
+        this.idleIndicator = null;
+    }
+
+    private finishBuildAttempt(): void {
+        if (!this.roadStart || !this.previewEnd) {
+            return;
+        }
+
+        const path = this.getPathCells(this.roadStart, this.previewEnd);
+        const length = path.cells.length;
+        if (!length) {
+            this.cancelBuild();
+            return;
+        }
+
+        const intersections = this.countNewIntersections(path.cells, path.orientation);
+        const cost = (COST_PER_BLOCK * length) + (COST_PER_INTERSECTION * intersections);
+        const pendingSpec = this.createRoadSpec(this.roadStart, this.previewEnd);
+        const summary: BuildSummary = {
+            name: pendingSpec.name,
+            length,
+            intersections,
+            cost,
+            blockCost: COST_PER_BLOCK,
+            intersectionCost: COST_PER_INTERSECTION
+        };
+
+        if (!this.checkRoadBuild(path.cells)) {
+            this.cancelBuild();
+            return;
+        }
+
+        this.pendingSpec = pendingSpec;
+        this.buildState = 'confirm';
+        EventBus.emit('builder:proposal', summary);
+    }
+
+    private cancelBuild(): void {
+        this.clearIdleIndicator();
+        this.clearPreview();
+        this.resetBuildState();
+    }
+
+    private resetBuildState(): void {
+        this.roadStart = null;
+        this.previewEnd = null;
+        this.pendingSpec = null;
+        this.buildState = 'idle';
+    }
+
+    private getArrowTextureKey(orientation: 'ew' | 'ns', start: GridPoint, end: GridPoint): string {
+        if (orientation === 'ew') {
+            return end.gridX >= start.gridX ? 'arrow_e' : 'arrow_w';
+        }
+
+        return end.gridY >= start.gridY ? 'arrow_s' : 'arrow_n';
+    }
+
+    private inspectRoadAtPointer(pointer: Phaser.Input.Pointer): void {
+        const grid = this.getGridFromPointer(pointer);
+        if (!grid) {
+            return;
+        }
+
+        const road = this.findRoadAt(grid);
+        if (!road) {
+            this.clearSelectedRoad();
+            EventBus.emit('road:clear');
+            return;
+        }
+
+        this.selectRoad(road);
+        const summary = this.getRoadSummary(road);
+        EventBus.emit('road:inspect', summary);
+    }
+
+    private findRoadAt(grid: GridPoint, allowBase: boolean = false): RoadInstance | null {
+        for (const road of this.roadNetwork.getRoads()) {
+            if (road.getBlockAt(grid.gridX, grid.gridY)) {
+                if (!allowBase && this.isBaseRoad(road.name)) {
+                    return null;
+                }
+                return road;
+            }
+        }
+
+        return null;
+    }
+
+    private getRoadSummary(road: RoadInstance): RoadSummary {
+        const intersections = this.countRoadIntersections(road);
+        const length = road.blocks.length;
+        const cost = (COST_PER_BLOCK * length) + (COST_PER_INTERSECTION * intersections);
+
+        return {
+            name: road.name,
+            length,
+            intersections,
+            cost,
+            blockCost: COST_PER_BLOCK,
+            intersectionCost: COST_PER_INTERSECTION
+        };
+    }
+
+    private countRoadIntersections(road: RoadInstance): number {
+        let count = 0;
+
+        for (const block of road.blocks) {
+            const existing = this.roadNetwork.getBlockAt(block.gridX, block.gridY);
+            if (existing instanceof Intersection) {
+                count += 1;
+            }
+        }
+
+        return count;
+    }
+
+    private checkRoadBuild(_cells: GridPoint[]): boolean {
+        const buildings: GridPoint[] = [];
+        return buildings.length === 0;
+    }
+
+    private isTrafficLightClick(pointer: Phaser.Input.Pointer): boolean {
+        const hits = this.input.hitTestPointer(pointer);
+        return hits.some((hit) => (hit as Phaser.GameObjects.GameObject).getData?.('trafficLight'));
+    }
+
+    private selectRoad(road: RoadInstance): void {
+        if (this.selectedRoad?.name === road.name) {
+            return;
+        }
+
+        this.clearSelectedRoad();
+        this.selectedRoad = road;
+        this.ensureSelectionTexture();
+
+        for (const block of road.blocks) {
+            const sprite = this.add.image(block.sprite.x, block.sprite.y, GameWrapper.SELECTION_TEXTURE_KEY);
+            sprite.setAlpha(0.35);
+            sprite.setDepth(Layers.Roads + 20 + (sprite.y / 1000));
+            this.selectionSprites.push(sprite);
+        }
+    }
+
+    private clearSelectedRoad(): void {
+        this.selectionSprites.forEach(sprite => sprite.destroy());
+        this.selectionSprites = [];
+        this.selectedRoad = null;
+    }
+
+    private ensureSelectionTexture(): void {
+        if (this.textures.exists(GameWrapper.SELECTION_TEXTURE_KEY)) {
+            return;
+        }
+
+        const gfx = this.add.graphics();
+        gfx.fillStyle(0xffffff, 1);
+        gfx.lineStyle(1, 0xffffff, 1);
+
+        const points = [
+            { x: 30, y: 0 },
+            { x: 60, y: 15 },
+            { x: 30, y: 30 },
+            { x: 0, y: 15 }
+        ];
+
+        gfx.beginPath();
+        gfx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+            gfx.lineTo(points[i].x, points[i].y);
+        }
+        gfx.closePath();
+        gfx.fillPath();
+        gfx.strokePath();
+
+        gfx.generateTexture(GameWrapper.SELECTION_TEXTURE_KEY, 60, 30);
+        gfx.destroy();
+    }
+
+    private createRoadSpec(start: GridPoint, end: GridPoint): RoadSpec {
+        const directionLabel = this.getDirectionLabel(start, end);
+        const index = this.countDirectionRoads(directionLabel) + 1;
+        const name = `${directionLabel} ${index}`;
+
+        if (start.gridY === end.gridY) {
+            return {
+                name,
+                orientation: 'ew',
+                direction: end.gridX >= start.gridX ? 'e' : 'w',
+                startX: start.gridX,
+                endX: end.gridX,
+                y: start.gridY
+            };
+        }
+
+        return {
+            name,
+            orientation: 'ns',
+            direction: end.gridY >= start.gridY ? 's' : 'n',
+            startY: start.gridY,
+            endY: end.gridY,
+            x: start.gridX
+        };
+    }
+
+    private countDirectionRoads(directionLabel: string): number {
+        return this.getAllRoadSpecs().filter((spec) => this.getDirectionLabelFromSpec(spec) === directionLabel).length;
+    }
+
+    private getDirectionLabel(start: GridPoint, end: GridPoint): string {
+        if (start.gridY === end.gridY) {
+            return end.gridX >= start.gridX ? 'Eastbound' : 'Westbound';
+        }
+
+        return end.gridY >= start.gridY ? 'Southbound' : 'Northbound';
+    }
+
+    private getDirectionLabelFromSpec(spec: RoadSpec): string {
+        if (spec.orientation === 'ew') {
+            return spec.direction === 'e' ? 'Eastbound' : 'Westbound';
+        }
+
+        return spec.direction === 's' ? 'Southbound' : 'Northbound';
+    }
+
+    private mergeRoadSpec(newSpec: RoadSpec): void {
+        const matches = this.getAllRoadSpecs().filter((spec) => this.canMergeRoadSpecs(spec, newSpec));
+        if (!matches.length) {
+            this.playerRoadSpecs.push(newSpec);
+            return;
+        }
+
+        const baseMatches = this.baseRoadSpecs.filter((spec) => matches.includes(spec));
+        const playerMatches = this.playerRoadSpecs.filter((spec) => matches.includes(spec));
+        const primary = baseMatches[0] ?? playerMatches[0] ?? newSpec;
+        const merged = this.buildMergedSpec(primary, newSpec, matches);
+
+        this.baseRoadSpecs = this.baseRoadSpecs.filter((spec) => !baseMatches.includes(spec));
+        this.playerRoadSpecs = this.playerRoadSpecs.filter((spec) => !playerMatches.includes(spec));
+
+        if (baseMatches.length > 0) {
+            this.baseRoadSpecs.push(merged);
+        } else {
+            this.playerRoadSpecs.push(merged);
+        }
+    }
+
+    private canMergeRoadSpecs(existing: RoadSpec, incoming: RoadSpec): boolean {
+        if (existing.orientation !== incoming.orientation) {
+            return false;
+        }
+
+        if (existing.direction !== incoming.direction) {
+            return false;
+        }
+
+        if (existing.orientation === 'ew') {
+            const existingEW = existing as EWRoadSpec;
+            const incomingEW = incoming as EWRoadSpec;
+            if (existingEW.y !== incomingEW.y) {
+                return false;
+            }
+
+            const rangeA = this.getRoadSpecRange(existing);
+            const rangeB = this.getRoadSpecRange(incoming);
+            return rangeA.min <= rangeB.max + 1 && rangeA.max >= rangeB.min - 1;
+        }
+
+        const existingNS = existing as NSRoadSpec;
+        const incomingNS = incoming as NSRoadSpec;
+        if (existingNS.x !== incomingNS.x) {
+            return false;
+        }
+
+        const rangeA = this.getRoadSpecRange(existing);
+        const rangeB = this.getRoadSpecRange(incoming);
+        return rangeA.min <= rangeB.max + 1 && rangeA.max >= rangeB.min - 1;
+    }
+
+    private buildMergedSpec(primary: RoadSpec, incoming: RoadSpec, matches: RoadSpec[]): RoadSpec {
+        const allSpecs = [...matches, incoming];
+        const ranges = allSpecs.map((spec) => this.getRoadSpecRange(spec));
+        const min = Math.min(...ranges.map((range) => range.min));
+        const max = Math.max(...ranges.map((range) => range.max));
+
+        if (primary.orientation === 'ew') {
+            const primaryEW = primary as EWRoadSpec;
+            const startX = primary.direction === 'e' ? min : max;
+            const endX = primary.direction === 'e' ? max : min;
+            return {
+                name: primary.name,
+                orientation: 'ew',
+                direction: primary.direction,
+                startX,
+                endX,
+                y: primaryEW.y
+            };
+        }
+
+        const primaryNS = primary as NSRoadSpec;
+        const startY = primary.direction === 's' ? min : max;
+        const endY = primary.direction === 's' ? max : min;
+        return {
+            name: primary.name,
+            orientation: 'ns',
+            direction: primary.direction,
+            startY,
+            endY,
+            x: primaryNS.x
+        };
+    }
+
+    private getRoadSpecRange(spec: RoadSpec): { min: number; max: number } {
+        if (spec.orientation === 'ew') {
+            return {
+                min: Math.min(spec.startX, spec.endX),
+                max: Math.max(spec.startX, spec.endX)
+            };
+        }
+
+        return {
+            min: Math.min(spec.startY, spec.endY),
+            max: Math.max(spec.startY, spec.endY)
+        };
+    }
+
+    private getAllRoadSpecs(): RoadSpec[] {
+        return [...this.baseRoadSpecs, ...this.playerRoadSpecs];
+    }
+
+    private isBaseRoad(name: string): boolean {
+        return this.baseRoadSpecs.some((spec) => spec.name === name);
+    }
+
+    private rebuildRoutes(): void {
+        this.builderRoutes = this.getRoutes().filter((route): route is Route => !!route);
+    }
+
+    private startSimulation(): void {
+        if (this.simulationRunning) {
+            return;
+        }
+
+        if (!this.builderRoutes.length || !this.areRoutesConnected(this.builderRoutes)) {
+            this.notifyUi('Not all routes connected!');
+            return;
+        }
+
+        this.simulationRunning = true;
+        this.simulationToken += 1;
+        const token = this.simulationToken;
+        EventBus.emit('simulation:started');
+
+        if (this.buildMode) {
+            this.buildMode = false;
+            this.cancelBuild();
+            EventBus.emit('builder:clear');
+        }
+
+        for (const route of this.builderRoutes) {
+            const spawnOnce = () => {
+                if (!this.simulationRunning || this.simulationToken !== token) {
+                    return;
+                }
+                this.spawnCar(route.road, 60, route.source, route.destination);
+
+                const nextDelay = Phaser.Math.Between(800, 1800);
+                this.time.delayedCall(nextDelay, spawnOnce);
+            };
+
+            spawnOnce();
+        }
+    }
+
+    private stopSimulation(): void {
+        if (!this.simulationRunning) {
+            return;
+        }
+
+        this.simulationRunning = false;
+        this.simulationToken += 1;
+
+        this.cars.forEach((car) => car.destroy());
+        this.cars = [];
+        this.navigators = [];
+
+        EventBus.emit('simulation:stopped');
+    }
+
+    private areRoutesConnected(routes: Route[]): boolean {
+        return routes.every((route) => Navigator.canReach(this.roadNetwork, route.source, route.destination));
+    }
+
+    private notifyUi(message: string, durationMs: number = 3000): void {
+        EventBus.emit('ui:notify', { message, durationMs });
+    }
+
+    private getPathCells(start: GridPoint, end: GridPoint): { cells: GridPoint[]; orientation: 'ew' | 'ns' } {
+        const cells: GridPoint[] = [];
+
+        if (start.gridY === end.gridY) {
+            const step = end.gridX >= start.gridX ? 1 : -1;
+            for (let x = start.gridX; step > 0 ? x <= end.gridX : x >= end.gridX; x += step) {
+                cells.push({ gridX: x, gridY: start.gridY });
+            }
+            return { cells, orientation: 'ew' };
+        }
+
+        const step = end.gridY >= start.gridY ? 1 : -1;
+        for (let y = start.gridY; step > 0 ? y <= end.gridY : y >= end.gridY; y += step) {
+            cells.push({ gridX: start.gridX, gridY: y });
+        }
+
+        return { cells, orientation: 'ns' };
+    }
+
+    private countNewIntersections(cells: GridPoint[], orientation: 'ew' | 'ns'): number {
+        const intersections = new Set<string>();
+
+        for (const cell of cells) {
+            const existing = this.roadNetwork.getBlockAt(cell.gridX, cell.gridY);
+            if (existing instanceof Intersection) {
+                continue;
+            }
+
+            for (const road of this.roadNetwork.getRoads()) {
+                if (road.orientation === orientation) {
+                    continue;
+                }
+
+                if (road.getBlockAt(cell.gridX, cell.gridY)) {
+                    intersections.add(`${cell.gridX},${cell.gridY}`);
+                    break;
+                }
+            }
+        }
+
+        return intersections.size;
     }
 
     private setupInput(): void {

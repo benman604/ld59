@@ -1,10 +1,10 @@
-import { RoadNetwork } from '../RoadNetwork';
-import { Road } from '../Road';
-import { Block } from '../Block';
-import { GameWrapper } from './GameWrapper';
-import { Layers } from '../../types';
-import { Car } from '../Car';
-import { Route } from '../Route';
+import { RoadNetwork } from '../../RoadNetwork';
+import { Road } from '../../Road';
+import { Block } from '../../Block';
+import { GameWrapper } from '../GameWrapper';
+import { Layers } from '../../../types';
+import { Car } from '../../Car';
+import { Route } from '../../Route';
 
 export class Level2 extends GameWrapper
 {

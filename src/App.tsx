@@ -16,6 +16,10 @@ function App()
     const [buildSummary, setBuildSummary] = useState<BuildSummary | null>(null);
     const [roadSummary, setRoadSummary] = useState<RoadSummary | null>(null);
     const [isBuilderScene, setIsBuilderScene] = useState(false);
+    const [simulationRunning, setSimulationRunning] = useState(false);
+    const [simulationLocked, setSimulationLocked] = useState(false);
+    const [notification, setNotification] = useState<string | null>(null);
+    const notificationTimerRef = useRef<number | null>(null);
 
     useEffect(() => {
         let frameId = 0;
@@ -44,6 +48,32 @@ function App()
     }, []);
 
     useEffect(() => {
+        const handleNotify = (payload: { message: string; durationMs?: number }) => {
+            setNotification(payload.message);
+
+            if (notificationTimerRef.current !== null) {
+                window.clearTimeout(notificationTimerRef.current);
+            }
+
+            const delay = payload.durationMs ?? 3000;
+            notificationTimerRef.current = window.setTimeout(() => {
+                setNotification(null);
+                notificationTimerRef.current = null;
+            }, delay);
+        };
+
+        EventBus.on('ui:notify', handleNotify);
+
+        return () => {
+            EventBus.removeListener('ui:notify', handleNotify);
+            if (notificationTimerRef.current !== null) {
+                window.clearTimeout(notificationTimerRef.current);
+                notificationTimerRef.current = null;
+            }
+        };
+    }, []);
+
+    useEffect(() => {
         const handleProposal = (summary: BuildSummary) => {
             setBuildSummary(summary);
         };
@@ -58,6 +88,36 @@ function App()
         return () => {
             EventBus.removeListener('builder:proposal', handleProposal);
             EventBus.removeListener('builder:clear', handleClear);
+        };
+    }, []);
+
+    useEffect(() => {
+        const handleSimulationLock = (payload: { locked: boolean }) => {
+            setSimulationLocked(payload.locked);
+        };
+
+        const handleSimulationStarted = () => {
+            setSimulationRunning(true);
+            setSimulationLocked(false);
+            setBuildMode(false);
+            setBuildSummary(null);
+            setRoadSummary(null);
+        };
+
+        const handleSimulationStopped = () => {
+            setSimulationRunning(false);
+            setSimulationLocked(false);
+            setBuildMode(false);
+        };
+
+        EventBus.on('simulation:lock', handleSimulationLock);
+        EventBus.on('simulation:started', handleSimulationStarted);
+        EventBus.on('simulation:stopped', handleSimulationStopped);
+
+        return () => {
+            EventBus.removeListener('simulation:lock', handleSimulationLock);
+            EventBus.removeListener('simulation:started', handleSimulationStarted);
+            EventBus.removeListener('simulation:stopped', handleSimulationStopped);
         };
     }, []);
 
@@ -82,12 +142,15 @@ function App()
     // Event emitted from the PhaserGame component
     const currentScene = (scene: Phaser.Scene) => {
 
-        const builderActive = scene.scene.key.startsWith('LevelBuilder');
+        const builderActive = scene.scene.key !== 'MainMenu';
         setIsBuilderScene(builderActive);
         if (!builderActive) {
             setBuildMode(false);
             setBuildSummary(null);
             setRoadSummary(null);
+            setSimulationRunning(false);
+            setSimulationLocked(false);
+            setNotification(null);
         }
         
     }
@@ -119,22 +182,47 @@ function App()
         setRoadSummary(null);
     };
 
+    const startSimulation = () => {
+        EventBus.emit('simulation:start');
+    };
+
+    const stopSimulation = () => {
+        EventBus.emit('simulation:stop');
+    };
+
     return (
         <div id="app">
             <div className="game-shell">
                 <PhaserGame ref={phaserRef} currentActiveScene={currentScene} />
-                {isBuilderScene && (
-                    <div className="ui-overlay">
-                        <BuildPanel
-                            isBuilderScene={isBuilderScene}
-                            buildMode={buildMode}
-                            buildSummary={buildSummary}
-                            onToggleBuildMode={toggleBuildMode}
-                            onConfirmBuild={confirmBuild}
-                            onCancelBuild={cancelBuild}
-                        />
-                        <RoadInspector summary={roadSummary} onDelete={deleteRoad} />
+                {notification && (
+                    <div className="ui-notification">
+                        <div className="ui-notification__chip">{notification}</div>
                     </div>
+                )}
+                {isBuilderScene && (
+                    <>
+                        <div className="ui-overlay-left">
+                            <button
+                                className="button button--text"
+                                onClick={simulationRunning ? stopSimulation : startSimulation}
+                                disabled={simulationRunning ? simulationLocked : false}
+                            >
+                                {simulationRunning ? 'Stop' : 'Start'}
+                            </button>
+                        </div>
+                        <div className="ui-overlay">
+                            <BuildPanel
+                                isBuilderScene={isBuilderScene}
+                                buildMode={buildMode}
+                                buildSummary={buildSummary}
+                                disabled={simulationRunning}
+                                onToggleBuildMode={toggleBuildMode}
+                                onConfirmBuild={confirmBuild}
+                                onCancelBuild={cancelBuild}
+                            />
+                            <RoadInspector summary={roadSummary} onDelete={deleteRoad} />
+                        </div>
+                    </>
                 )}
             </div>
             <PositionPanel
