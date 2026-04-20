@@ -30,6 +30,30 @@ type RoadSummary = BuildSummary & {
     name: string;
 };
 
+type SpritePlacementOptions = {
+    depth?: number;
+    scale?: number;
+    shift?: { x?: number; y?: number };
+};
+
+type ArrowOptions = SpritePlacementOptions & {
+    gridOffset?: { x?: number; y?: number };
+};
+
+type RouteLabelOptions = {
+    target?: number;
+    labelOffset?: { x?: number; y?: number };
+    labelDepth?: number;
+    labelStyle?: Phaser.Types.GameObjects.Text.TextStyle;
+};
+
+type RouteTracker = {
+    route: Route;
+    target: number;
+    count: number;
+    label: Phaser.GameObjects.Text;
+};
+
 type RoadInstance = ReturnType<RoadNetwork['getRoads']>[number];
 
 export abstract class GameWrapper extends Scene
@@ -53,13 +77,14 @@ export abstract class GameWrapper extends Scene
     private pendingSpec: RoadSpec | null = null;
     private baseRoadSpecs: RoadSpec[] = [];
     private playerRoadSpecs: RoadSpec[] = [];
-    private builderRoutes: Route[] = [];
+    private builderRoutes: RouteTracker[] = [];
     private simulationRunning = false;
     private simulationToken = 0;
     private modeHint: Phaser.GameObjects.Text | null = null;
     private clickStart: { x: number; y: number } | null = null;
     private selectedRoad: RoadInstance | null = null;
     private selectionSprites: Phaser.GameObjects.Image[] = [];
+    private carRouteMap: Map<Car, RouteTracker> = new Map();
 
     private static readonly SELECTION_TEXTURE_KEY = 'road-selection-iso';
 
@@ -92,6 +117,7 @@ export abstract class GameWrapper extends Scene
         this.clickStart = null;
         this.selectedRoad = null;
         this.selectionSprites = [];
+        this.carRouteMap.clear();
 
         if (this.isBuilderEnabled()) {
             EventBus.emit('builder:clear');
@@ -171,11 +197,15 @@ export abstract class GameWrapper extends Scene
         return [];
     }
 
-    protected getRoutes(): Route[] {
+    protected getRoutes(): RouteTracker[] {
         return [];
     }
 
-    protected createRouteFromGrid(source: GridPoint, destination: GridPoint): Route | null {
+    protected createRouteFromGrid(
+        source: GridPoint,
+        destination: GridPoint,
+        options: RouteLabelOptions = {}
+    ): RouteTracker | null {
         const sourceBlock = this.roadNetwork.getBlockAt(source.gridX, source.gridY);
         const destinationBlock = this.roadNetwork.getBlockAt(destination.gridX, destination.gridY);
         if (!sourceBlock || !destinationBlock) {
@@ -187,7 +217,30 @@ export abstract class GameWrapper extends Scene
             return null;
         }
 
-        return new Route(this, this.roadNetwork, sourceRoad, sourceBlock, destinationBlock);
+        const route = new Route(this, this.roadNetwork, sourceRoad, sourceBlock, destinationBlock);
+        const target = options.target ?? 10;
+        const labelOffset = options.labelOffset ?? { x: 16, y: -18 };
+        const labelStyle = options.labelStyle ?? {
+            fontFamily: 'Pixeled',
+            fontSize: '12px',
+            color: '#f2f2f2'
+        };
+        const labelDepth = options.labelDepth ?? (Layers.Buildings + 5);
+
+        const label = this.createGridText(
+            `0/${target}`,
+            source.gridX,
+            source.gridY,
+            labelStyle,
+            { depth: labelDepth, shift: labelOffset }
+        );
+
+        return {
+            route,
+            target,
+            count: 0,
+            label
+        };
     }
 
     protected getRoadNetworkOrigin(): { x: number; y: number } {
@@ -257,13 +310,12 @@ export abstract class GameWrapper extends Scene
         return !!nextBlock && this.roadNetwork.isOccupied(nextX, nextY);
     }
 
-    createGridSprite(
+    createSprite(
         textureKey: string,
-        gridX: number,
-        gridY: number,
-        options: { depth?: number; scale?: number; shift?: { x?: number; y?: number } } = {}
+        x: number,
+        y: number,
+        options: SpritePlacementOptions = {}
     ): Phaser.GameObjects.Image {
-        const { x, y } = this.roadNetwork.getWorldFromGrid(gridX, gridY);
         const sprite = this.add.image(
             x + (options.shift?.x || 0),
             y + (options.shift?.y || 0) + 15,
@@ -280,6 +332,79 @@ export abstract class GameWrapper extends Scene
         return sprite;
     }
 
+    createText(
+        text: string,
+        x: number,
+        y: number,
+        style: Phaser.Types.GameObjects.Text.TextStyle = {},
+        options: SpritePlacementOptions = {}
+    ): Phaser.GameObjects.Text {
+        const label = this.add.text(
+            x + (options.shift?.x || 0),
+            y + (options.shift?.y || 0) + 15,
+            text,
+            style
+        );
+
+        if (typeof options.scale === 'number') {
+            label.setScale(options.scale);
+        }
+        if (typeof options.depth === 'number') {
+            label.setDepth(options.depth);
+        }
+
+        return label;
+    }
+
+    createGridSprite(
+        textureKey: string,
+        gridX: number,
+        gridY: number,
+        options: SpritePlacementOptions = {}
+    ): Phaser.GameObjects.Image {
+        const { x, y } = this.roadNetwork.getWorldFromGrid(gridX, gridY);
+        return this.createSprite(textureKey, x, y, options);
+    }
+
+    createGridText(
+        text: string,
+        gridX: number,
+        gridY: number,
+        style: Phaser.Types.GameObjects.Text.TextStyle = {},
+        options: SpritePlacementOptions = {}
+    ): Phaser.GameObjects.Text {
+        const { x, y } = this.roadNetwork.getWorldFromGrid(gridX, gridY);
+        return this.createText(text, x, y, style, options);
+    }
+
+    addArrow(spec: RoadSpec, options: ArrowOptions = {}): Phaser.GameObjects.Image {
+        let gridX = 0;
+        let gridY = 0;
+        let textureKey = 'arrow_e';
+
+        if (spec.orientation === 'ew') {
+            const minX = Math.min(spec.startX, spec.endX);
+            const maxX = Math.max(spec.startX, spec.endX);
+            const innerX = Math.abs(minX) <= Math.abs(maxX) ? minX : maxX;
+            gridX = innerX;
+            gridY = spec.y - 1;
+            textureKey = spec.direction === 'e' ? 'arrow_e' : 'arrow_w';
+        } else {
+            const minY = Math.min(spec.startY, spec.endY);
+            const maxY = Math.max(spec.startY, spec.endY);
+            const innerY = Math.abs(minY) <= Math.abs(maxY) ? minY : maxY;
+            gridX = spec.x - 1;
+            gridY = innerY;
+            textureKey = spec.direction === 's' ? 'arrow_s' : 'arrow_n';
+        }
+
+        gridX += options.gridOffset?.x ?? 0;
+        gridY += options.gridOffset?.y ?? 0;
+
+        const { gridOffset, ...spriteOptions } = options;
+        return this.createGridSprite(textureKey, gridX, gridY, spriteOptions);
+    }
+
     update (_time: number, delta: number)
     {
         this.positionFailureUi();
@@ -294,6 +419,12 @@ export abstract class GameWrapper extends Scene
             }
 
             if (car.update(delta)) {
+                const tracker = this.carRouteMap.get(car);
+                if (tracker) {
+                    tracker.count += 1;
+                    this.updateRouteLabel(tracker);
+                    this.carRouteMap.delete(car);
+                }
                 this.onCarFinished(car);
                 car.destroy();
                 this.cars.splice(i, 1);
@@ -995,7 +1126,8 @@ export abstract class GameWrapper extends Scene
     }
 
     private rebuildRoutes(): void {
-        this.builderRoutes = this.getRoutes().filter((route): route is Route => !!route);
+        this.clearRouteTrackers();
+        this.builderRoutes = this.getRoutes().filter((route): route is RouteTracker => !!route);
     }
 
     private startSimulation(): void {
@@ -1019,12 +1151,15 @@ export abstract class GameWrapper extends Scene
             EventBus.emit('builder:clear');
         }
 
-        for (const route of this.builderRoutes) {
+        for (const tracker of this.builderRoutes) {
             const spawnOnce = () => {
                 if (!this.simulationRunning || this.simulationToken !== token) {
                     return;
                 }
-                this.spawnCar(route.road, 60, route.source, route.destination);
+                const car = this.spawnCar(tracker.route.road, 60, tracker.route.source, tracker.route.destination);
+                if (car) {
+                    this.carRouteMap.set(car, tracker);
+                }
 
                 const nextDelay = Phaser.Math.Between(800, 1800);
                 this.time.delayedCall(nextDelay, spawnOnce);
@@ -1045,12 +1180,27 @@ export abstract class GameWrapper extends Scene
         this.cars.forEach((car) => car.destroy());
         this.cars = [];
         this.navigators = [];
+        this.carRouteMap.clear();
 
         EventBus.emit('simulation:stopped');
     }
 
-    private areRoutesConnected(routes: Route[]): boolean {
-        return routes.every((route) => Navigator.canReach(this.roadNetwork, route.source, route.destination));
+    private areRoutesConnected(routes: RouteTracker[]): boolean {
+        return routes.every((tracker) => Navigator.canReach(
+            this.roadNetwork,
+            tracker.route.source,
+            tracker.route.destination
+        ));
+    }
+
+    private updateRouteLabel(tracker: RouteTracker): void {
+        tracker.label.setText(`${tracker.count}/${tracker.target}`);
+    }
+
+    private clearRouteTrackers(): void {
+        this.builderRoutes.forEach((tracker) => tracker.label.destroy());
+        this.builderRoutes = [];
+        this.carRouteMap.clear();
     }
 
     private notifyUi(message: string, durationMs: number = 3000): void {
