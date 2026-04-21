@@ -35,7 +35,7 @@ export class MainMenu extends GameWrapper
     
     changeScene ()
     {
-        this.scene.start('LevelBuilder1');
+        this.scene.start('TestGame');
     }
 
     protected buildRoadNetwork(): RoadNetwork {
@@ -81,9 +81,11 @@ export class MainMenu extends GameWrapper
             .setDepth(Layers.Buildings + 5);
 
         const buttonRowY = 560;
-        this.playButton = this.createMenuButton('Play', buttonRowY, () => this.changeScene(), 420);
-        this.creditsButton = this.createMenuButton('Credits', buttonRowY, () => this.toggleCredits(), 620);
-        this.backButton = this.createMenuButton('Back', buttonRowY, () => this.hideCredits(), 520);
+        const centerX = this.scale.width / 2;
+        const spacing = 120;
+        this.playButton = this.createMenuButton('Play', buttonRowY, () => this.changeScene(), centerX - spacing);
+        this.creditsButton = this.createMenuButton('Credits', buttonRowY, () => this.toggleCredits(), centerX + spacing);
+        this.backButton = this.createMenuButton('Back', buttonRowY, () => this.hideCredits(), centerX);
         this.setMenuButtonVisible(this.backButton, false);
     }
 

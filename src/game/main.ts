@@ -3,6 +3,7 @@ import { GameOver } from './scenes/GameOver';
 import { TestGame } from './scenes/old/TestGame';
 import { Level1 } from './scenes/old/Level1';
 import { Level2 } from './scenes/old/Level2';
+import { LevelBuilder } from './scenes/old/LevelBuilder';
 import { LevelBuilder1 } from './scenes/Levels/LevelBuilder1';
 import { LevelBuilder2 } from './scenes/Levels/LevelBuilder2';
 import { LevelBuilder5 } from './scenes/Levels/LevelBuilder5';
@@ -16,8 +17,8 @@ import { Preloader } from './scenes/Preloader';
 //  https://docs.phaser.io/api-documentation/typedef/types-core#gameconfig
 const config: Phaser.Types.Core.GameConfig = {
     type: AUTO,
-    width: 1024,
-    height: 768,
+    width: 960,
+    height: 640,
     parent: 'game-container',
     backgroundColor: '#028af8',
     antialias: false,
@@ -32,6 +33,7 @@ const config: Phaser.Types.Core.GameConfig = {
         LevelBuilder3,
         LevelBuilder4,
         LevelBuilder5,
+        LevelBuilder,
         TestGame,
         GameOver
     ]

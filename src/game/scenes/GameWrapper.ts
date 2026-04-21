@@ -330,7 +330,7 @@ export abstract class GameWrapper extends Scene
     }
 
     protected onCarFinished(_car: Car): void {
-        this.sound.play('sfx-horn', { volume: this.sfxVolume });
+        this.sound.play('sfx-horn', { volume: this.sfxVolume * 0.1 });
     }
 
     protected isSpawnBlocked(road: Road, sourceBlock: Block): boolean {
@@ -522,7 +522,7 @@ export abstract class GameWrapper extends Scene
         EventBus.emit('simulation:lock', { locked: true });
         this.crashTriggered = true;
         this.sound.play('sfx-crash', { volume: this.sfxVolume });
-        this.sound.play('sfx-crash', { volume: 0.7 });
+        // this.sound.play('sfx-crash', { volume: 0.7 });
 
         this.camera.pan(x, y, 200, 'Sine.easeInOut');
         this.camera.zoomTo(2.2, 200, 'Sine.easeInOut');

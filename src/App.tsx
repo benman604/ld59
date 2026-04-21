@@ -24,6 +24,8 @@ function App()
     const [budgetTotal, setBudgetTotal] = useState<number | null>(null);
     const [musicVolume, setMusicVolume] = useState(0.35);
     const [sfxVolume, setSfxVolume] = useState(0.6);
+    const [builderTool, setBuilderTool] = useState<'road' | 'source' | 'destination'>('road');
+    const [activeSceneKey, setActiveSceneKey] = useState<string | null>(null);
     const [notification, setNotification] = useState<string | null>(null);
     const notificationTimerRef = useRef<number | null>(null);
 
@@ -200,6 +202,7 @@ function App()
     const currentScene = (scene: Phaser.Scene) => {
 
         const builderActive = scene.scene.key !== 'MainMenu';
+        setActiveSceneKey(scene.scene.key);
         setIsBuilderScene(builderActive);
         if (!builderActive) {
             setBuildMode(false);
@@ -212,6 +215,11 @@ function App()
             setNotification(null);
             setBudgetRemaining(null);
             setBudgetTotal(null);
+            setBuilderTool('road');
+        }
+
+        if (scene.scene.key === 'LevelBuilder') {
+            EventBus.emit('builder:tool', { tool: builderTool });
         }
         
     }
@@ -222,6 +230,11 @@ function App()
         setBuildSummary(null);
         setRoadSummary(null);
         EventBus.emit('builder:mode', { enabled: next });
+    };
+
+    const selectBuilderTool = (tool: 'road' | 'source' | 'destination') => {
+        setBuilderTool(tool);
+        EventBus.emit('builder:tool', { tool });
     };
 
     const confirmBuild = () => {
@@ -375,6 +388,9 @@ function App()
                                     onToggleBuildMode={toggleBuildMode}
                                     onConfirmBuild={confirmBuild}
                                     onCancelBuild={cancelBuild}
+                                    showToolSelector={activeSceneKey === 'LevelBuilder'}
+                                    selectedTool={builderTool}
+                                    onSelectTool={selectBuilderTool}
                                 />
                                 <RoadInspector summary={roadSummary} onDelete={deleteRoad} />
                             </div>

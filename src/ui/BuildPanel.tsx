@@ -8,6 +8,9 @@ type BuildPanelProps = {
     onToggleBuildMode: () => void;
     onConfirmBuild: () => void;
     onCancelBuild: () => void;
+    showToolSelector?: boolean;
+    selectedTool?: 'road' | 'source' | 'destination';
+    onSelectTool?: (tool: 'road' | 'source' | 'destination') => void;
 };
 
 export function BuildPanel({
@@ -17,7 +20,10 @@ export function BuildPanel({
     disabled,
     onToggleBuildMode,
     onConfirmBuild,
-    onCancelBuild
+    onCancelBuild,
+    showToolSelector = false,
+    selectedTool = 'road',
+    onSelectTool
 }: BuildPanelProps) {
     return (
         <div>
@@ -32,6 +38,31 @@ export function BuildPanel({
                     {buildMode ? 'Cancel' : 'Build'}
                 </button>
             </div>
+            {showToolSelector && (
+                <div className="ui-tool-row">
+                    <button
+                        className={`button button--text${selectedTool === 'road' ? ' button--active' : ''}`}
+                        onClick={() => onSelectTool?.('road')}
+                        aria-pressed={selectedTool === 'road'}
+                    >
+                        Road
+                    </button>
+                    <button
+                        className={`button button--text${selectedTool === 'source' ? ' button--active' : ''}`}
+                        onClick={() => onSelectTool?.('source')}
+                        aria-pressed={selectedTool === 'source'}
+                    >
+                        Source
+                    </button>
+                    <button
+                        className={`button button--text${selectedTool === 'destination' ? ' button--active' : ''}`}
+                        onClick={() => onSelectTool?.('destination')}
+                        aria-pressed={selectedTool === 'destination'}
+                    >
+                        Destination
+                    </button>
+                </div>
+            )}
             {buildSummary && (
                 <div className="spritePosition">
                     <div>Build {buildSummary.name}</div>

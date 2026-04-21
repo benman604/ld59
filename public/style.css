@@ -1,6 +1,6 @@
 @font-face {
     font-family: 'Pixeled';
-    src: url('/assets/fonts/Pixeled.ttf') format('truetype');
+    src: url('assets/fonts/Pixeled.ttf') format('truetype');
     font-weight: normal;
     font-style: normal;
     font-display: swap;
@@ -145,6 +145,17 @@ body {
     padding: 6px 12px;
     font-size: 14px;
     line-height: 1.2;
+}
+
+.button--active {
+    border-color: rgba(255, 211, 106, 0.9);
+    color: rgba(255, 211, 106, 0.95);
+}
+
+.ui-tool-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
 }
 
 .ui-audio-slider {
