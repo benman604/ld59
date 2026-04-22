@@ -4,7 +4,7 @@ Submission for [Ludum Dare 59](https://ldjam.com/events/ludum-dare/59/turnpike)
 
 Play it on [itch.io](https://ldjam.com/events/ludum-dare/59/turnpike)! 
 
-![screenshot](screenshot.png)
+![screenshot](_screenshot.png)
 
 ---
 
